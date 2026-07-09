@@ -1,5 +1,6 @@
 import {
   BRANCH_FOLLOWUP,
+  BRANCH_NOTES,
   BRANCH_SELECTION,
   LENSES,
   branchTypeOfNode,
@@ -18,7 +19,7 @@ import {
   unionBounds as sharedUnionBounds
 } from "../core/layout.js";
 
-export { BRANCH_FOLLOWUP, BRANCH_SELECTION, DEFAULT_CHILD, DEFAULT_ROOT, LENSES, TREE_PARENT_GAP, TREE_STACK_GAP };
+export { BRANCH_FOLLOWUP, BRANCH_NOTES, BRANCH_SELECTION, DEFAULT_CHILD, DEFAULT_ROOT, LENSES, TREE_PARENT_GAP, TREE_STACK_GAP };
 
 export var SVGNS = "http://www.w3.org/2000/svg";
 export var MIN_SCALE = 0.15, MAX_SCALE = 2.5;
@@ -190,6 +191,7 @@ export function isSelectionBranch(n){ return branchTypeOf(n) === BRANCH_SELECTIO
   // explicit branch_type fall back to selected_text: present means selection,
   // absent means follow-up.
 export function isFollowup(n){ return branchTypeOf(n) === BRANCH_FOLLOWUP; }
+export function isNotesBranch(n){ return branchTypeOf(n) === BRANCH_NOTES; }
 export function followupsOf(id){
     return childrenOf(id).filter(isFollowup).sort(nodeOrder);
   }

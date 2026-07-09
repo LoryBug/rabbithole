@@ -346,19 +346,27 @@ body.mode-canvas #viewport { display: block; }
    so crossing from card to drawer never fires the card's mouseleave tuck-in. */
 .node-composer.open { pointer-events: auto; }
 .nc-clip { padding: 0 10px 26px; overflow: hidden; }
-.nc-handle { position: absolute; top: 0; left: 50%; transform: translate(-50%, 0); display: inline-flex; align-items: center; gap: 5px;
+.nc-plus { font-size: 13px; line-height: 1; font-weight: 400; color: var(--accent); }
+.nc-handle-wrap { position: absolute; top: 0; left: 50%; transform: translate(-50%, 0); display: inline-flex; align-items: center; gap: 6px; opacity: 0; pointer-events: none; transition: opacity 120ms ease; z-index: 1; }
+@media (hover: hover) and (pointer: fine) {
+  .node${""}:hover .nc-handle-wrap { opacity: 1; pointer-events: auto; }
+}
+.node-composer.nc-draft .nc-handle-wrap::after { content: ""; width: 4px; height: 4px; border-radius: 50%; background: var(--accent); position: absolute; left: 50%; bottom: -8px; transform: translateX(-50%); }
+.node-composer.open .nc-handle-wrap { opacity: 0; pointer-events: none; }
+.nc-handle, .nc-notes-handle { display: inline-flex; align-items: center; gap: 5px;
   font-family: var(--font-ui); font-size: 10.5px; font-weight: 500; letter-spacing: 0.02em; color: var(--fg-dim);
   background: var(--node-bg); border: 1px solid var(--border); border-top: none; border-radius: 0 0 9px 9px;
-  padding: 3.5px 11px 4.5px; cursor: pointer; opacity: 0; pointer-events: none; box-shadow: 0 4px 10px -6px rgba(0,0,0,0.3);
-  transition: opacity 120ms ease, color 130ms ease; }
-@media (hover: hover) and (pointer: fine) {
-  .node${""}:hover .nc-handle { opacity: 1; pointer-events: auto; }
-}
+  padding: 3.5px 11px 4.5px; cursor: pointer; box-shadow: 0 4px 10px -6px rgba(0,0,0,0.3);
+  transition: color 130ms ease; }
 .nc-handle:hover { color: var(--fg-bold); }
-.nc-plus { font-size: 13px; line-height: 1; font-weight: 400; color: var(--accent); }
-/* a parked draft marks the handle with a small accent dot */
-.node-composer.nc-draft .nc-handle::after { content: ""; width: 4px; height: 4px; border-radius: 50%; background: var(--accent); }
-.node-composer.open .nc-handle { opacity: 0; pointer-events: none; }
+.nc-notes-handle:hover { color: #e8a317; }
+.notes-badge { font-size: 11px; color: #e8a317; margin-bottom: 8px; font-weight: 600; letter-spacing: 0.02em; }
+.notes-content { cursor: text; max-height: 360px; overflow-y: auto; }
+.notes-content.notes-empty { color: var(--fg-faint); font-style: italic; overflow-y: hidden; }
+.notes-textarea { width: 100%; min-height: 80px; max-height: 360px; border: 1px solid var(--border); border-radius: 6px; background: color-mix(in srgb, var(--node-bg) 80%, transparent); color: var(--fg); font-family: var(--font-doc); font-size: 13px; line-height: 1.6; padding: 8px; resize: vertical; outline: none; box-sizing: border-box; }
+.notes-textarea:focus { border-color: color-mix(in srgb, #e8a317 50%, var(--border)); box-shadow: 0 0 0 2px color-mix(in srgb, #e8a317 15%, transparent); }
+.notes-textarea::placeholder { color: var(--fg-faint); }
+@media (hover: none), (pointer: coarse) { .nc-handle-wrap { opacity: 1; pointer-events: auto; transition: none; } .node-composer.open .nc-handle-wrap { opacity: 0; pointer-events: none; } }
 .nc-inner { display: flex; align-items: flex-end; gap: 6px; margin-top: 5px; background: var(--node-bg); border: 1px solid var(--border); border-radius: 10px; padding: 5px 5px 5px 12px; box-shadow: 0 8px 18px -8px rgba(0,0,0,0.32); pointer-events: auto;
   transform: translateY(calc(-100% - 34px)); opacity: 0;
   transition: transform 0.34s cubic-bezier(0.3, 1.4, 0.45, 1), opacity 0.16s ease, border-color 0.15s, box-shadow 0.15s; }
@@ -369,7 +377,6 @@ body.mode-canvas #viewport { display: block; }
 .nc-inner textarea::placeholder { color: var(--fg-faint); }
 .nc-inner .send-btn { width: 22px; height: 22px; }
 .nc-inner .send-btn svg { width: 12px; height: 12px; }
-@media (hover: none), (pointer: coarse) { .nc-handle { opacity: 1; pointer-events: auto; transition: none; } .node-composer.open .nc-handle { opacity: 0; pointer-events: none; } }
 .origin-quote { font-family: var(--font-doc); font-size: 12px; color: var(--fg-dim); border-left: 2px solid var(--border-focus); padding-left: 9px; margin-bottom: 12px; font-style: italic; }
 
 #toolbar { position: fixed; top: 14px; left: 14px; z-index: 50; display: none; align-items: center; gap: 8px; background: var(--bar-bg); border: 1px solid var(--border); border-radius: 10px; padding: 7px 10px; box-shadow: var(--shadow); }

@@ -1,5 +1,6 @@
 import {
   BRANCH_FOLLOWUP,
+  BRANCH_NOTES,
   BRANCH_SELECTION,
   CANVAS_BASE,
   DEFAULT_CHILD,
@@ -28,6 +29,7 @@ import {
   frozen,
   agentAttached,
   isFollowup,
+  isNotesBranch,
   isSelectionBranch,
   isUnread,
   isVisible,
@@ -49,17 +51,21 @@ import {
   shiftBounds,
   shouldReduceMotion,
   unionBounds,
+  uuid,
   view,
   viewport,
   world,
   zoomLabel
 } from "./core.js";
 import { applyChildHighlights, openNode } from "./reader.js";
+import { refreshNodeHtml } from "./renderer.js";
 
 var canvasHooks = {
   hideAsk: function(){},
   hidePeek: function(){},
   sendFollowup: function(){ return null; },
+  submitCardNotes: function(){ return null; },
+  post: function(){ return Promise.resolve({ ok: true }); },
   confirmDelete: function(){},
   persistNode: function(){},
   persistNodesBulk: function(){},
@@ -200,7 +206,13 @@ export function createNodeEl(node, enter){
       delBtn.addEventListener("click", function(e){ e.stopPropagation(); canvasHooks.confirmDelete(node, delBtn); });
       acts.appendChild(delBtn);
     }
-    acts.appendChild(aDown); acts.appendChild(aUp); acts.appendChild(divider); acts.appendChild(collapseBtn); acts.appendChild(copyBtn); acts.appendChild(openBtn);
+    acts.appendChild(aDown); acts.appendChild(aUp); acts.appendChild(divider);
+    if (isNotesBranch(node)){
+      var editBtn = mkIconBtn('<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 1.5l3.5 3.5L5 14.5H1.5V11L11 1.5z"/></svg>', "Edit notes");
+      editBtn.addEventListener("click", function(e){ e.stopPropagation(); toggleNotesEdit(node); });
+      acts.appendChild(editBtn);
+    }
+    acts.appendChild(collapseBtn); acts.appendChild(copyBtn); acts.appendChild(openBtn);
     head.appendChild(selectBtn); head.appendChild(titleEl); head.appendChild(acts);
 
     var body = document.createElement("div"); body.className = "node-body";
@@ -307,13 +319,18 @@ export function autoGrowEl(ta, max){
     var inner = document.createElement("div"); inner.className = "nc-inner";
     var ta = document.createElement("textarea"); ta.rows = 1;
     var send = document.createElement("button"); send.className = "send-btn"; send.title = "Send (↵)"; send.setAttribute("aria-label", "Send follow-up"); send.innerHTML = SEND_ICON;
-    var handle = document.createElement("button"); handle.type = "button"; handle.className = "nc-handle"; handle.title = "Ask a follow-up about this document";
+    var handleWrap = document.createElement("div"); handleWrap.className = "nc-handle-wrap";
+    var fuHandle = document.createElement("button"); fuHandle.type = "button"; fuHandle.className = "nc-handle"; fuHandle.title = "Ask a follow-up about this document";
     var plus = document.createElement("span"); plus.className = "nc-plus"; plus.textContent = "+";
-    handle.appendChild(plus); handle.appendChild(document.createTextNode(" Follow-up"));
+    fuHandle.appendChild(plus); fuHandle.appendChild(document.createTextNode(" Follow-up"));
+    var notesHandle = document.createElement("button"); notesHandle.type = "button"; notesHandle.className = "nc-notes-handle"; notesHandle.title = "Add a notes block";
+    notesHandle.textContent = "📝 Notes";
+    handleWrap.appendChild(fuHandle); handleWrap.appendChild(notesHandle);
     inner.appendChild(ta); inner.appendChild(send); clip.appendChild(inner);
-    comp.appendChild(clip); comp.appendChild(handle);
+    comp.appendChild(clip); comp.appendChild(handleWrap);
     node.ncComp = comp; node.ncInner = inner; node.ncText = ta; node.ncSend = send;
-    handle.addEventListener("click", function(e){ e.stopPropagation(); openCardDrawer(node); });
+    fuHandle.addEventListener("click", function(e){ e.stopPropagation(); openCardDrawer(node); });
+    notesHandle.addEventListener("click", function(e){ e.stopPropagation(); submitCardNotes(node, motionSourceFromEvent(e)); });
     ta.addEventListener("input", function(){ autoGrowEl(ta, 90); updateCardComposer(node); });
     ta.addEventListener("keydown", function(e){
       if (e.key === "Enter" && !e.shiftKey){ e.preventDefault(); submitCardFollowup(node, "keyboard"); }
@@ -363,6 +380,12 @@ export function updateCardComposer(node){
     updateCardComposer(node);
     revealNode(kid, source);
   }
+  function submitCardNotes(node, source){
+    if (closed){ flashHint("Session ended — reopen this Rabbithole from your terminal to continue."); return; }
+    if (node.status === "pending") return;
+    var kid = canvasHooks.submitCardNotes(node);
+    if (kid) revealNode(kid, source);
+  }
   // Asking from a card spawns the answer card wherever placeChild puts it —
   // possibly off-screen. Pan just enough to bring it into view (user-initiated,
   // so moving the viewport is expected; streaming never does this).
@@ -404,6 +427,16 @@ export function animateView(tx, ty, ts, opts){
 export function fillBody(node){
     var body = node.bodyEl; if (!body) return;
     body.innerHTML = "";
+    if (isNotesBranch(node)){
+      var nb = document.createElement("div"); nb.className = "notes-badge"; nb.textContent = "📝 Notes";
+      body.appendChild(nb);
+      var dc = buildDocContent(node, CANVAS_BASE);
+      dc.classList.add("notes-content");
+      if (!node.markdown) dc.classList.add("notes-empty");
+      body.appendChild(dc);
+      applyChildHighlights(dc, node);
+      return;
+    }
     if (node.origin && node.origin.synthesis){
       var sq = document.createElement("div"); sq.className = "origin-quote"; sq.textContent = node.origin.synthesis_mode === "question_map" ? "✦ Question Map from selected nodes" : "✦ Synthesis from selected nodes";
       body.appendChild(sq);
@@ -418,6 +451,43 @@ export function fillBody(node){
     var dc = buildDocContent(node, CANVAS_BASE);
     body.appendChild(dc);
     applyChildHighlights(dc, node);
+  }
+  function saveNotesContent(node){
+    if (!node.notesTa) return;
+    var md = node.notesTa.value;
+    node.md = md;
+    node.markdown = md;
+    refreshNodeHtml(node);
+    node.title = md.split("\n")[0].replace(/^#\s*/, "").slice(0, 48) || "Notes";
+    if (node.titleEl) node.titleEl.textContent = node.title;
+    canvasHooks.post({ type: "node_update", node_id: node.id, markdown: md, html: node.html, title: node.title });
+  }
+  function toggleNotesEdit(node){
+    if (!node.bodyEl) return;
+    if (node.notesEditing){
+      saveNotesContent(node);
+      node.notesEditing = false;
+      fillBody(node);
+      updateCardComposer(node);
+      return;
+    }
+    node.notesEditing = true;
+    var body = node.bodyEl;
+    body.innerHTML = "";
+    var nb = document.createElement("div"); nb.className = "notes-badge"; nb.textContent = "📝 Notes";
+    body.appendChild(nb);
+    var ta = document.createElement("textarea"); ta.className = "notes-textarea"; ta.rows = 3;
+    ta.value = node.md || node.markdown || "";
+    ta.placeholder = "Write your notes here… (markdown supported)";
+    body.appendChild(ta);
+    node.notesTa = ta;
+    ta.focus({ preventScroll: true });
+    autoGrowEl(ta, 600);
+    ta.addEventListener("input", function(){ autoGrowEl(ta, 400); });
+    ta.addEventListener("blur", function(){ toggleNotesEdit(node); });
+    ta.addEventListener("keydown", function(e){
+      if (e.key === "Escape"){ e.preventDefault(); toggleNotesEdit(node); }
+    });
   }
   function setNodeFontScale(node, delta){
     node.font_scale = Math.min(MAX_FS, Math.max(MIN_FS, (node.font_scale || 1) + delta));
@@ -520,7 +590,7 @@ function clamp(lo, hi, v){ return Math.max(lo, Math.min(hi, v)); }
                            (mr.left + mr.width / 2 - er.left) / view.scale);
           anchored = true;
         }
-      } else if (isFollowup(child)){
+      } else if (isFollowup(child) || isNotesBranch(child)){
         ay = p.y + ph - 22;
       }
     }
@@ -761,6 +831,7 @@ export function tidy(source){
       var kids = childrenOf(node.id).sort(nodeOrder);
       var selectionKids = kids.filter(isSelectionBranch);
       var followupKids = kids.filter(isFollowup);
+      var notesKids = kids.filter(isNotesBranch);
       var sideBounds = null;
       var sideX = node.x + node.w + TREE_PARENT_GAP;
       var sideY = node.y;
@@ -772,16 +843,20 @@ export function tidy(source){
       });
 
       var belowY = node.y + effH(node) + TREE_PARENT_GAP;
-      followupKids.forEach(function(k){
-        var kb = place(k, node.x, belowY);
-        if (boundsOverlap(kb, sideBounds)){
-          var dy = sideBounds.maxY + TREE_STACK_GAP - kb.minY;
-          moveSubtree(k, 0, dy);
-          kb = shiftBounds(kb, 0, dy);
-        }
-        bounds = unionBounds(bounds, kb);
-        belowY = kb.maxY + TREE_STACK_GAP;
-      });
+      function placeBelow(kids){
+        kids.forEach(function(k){
+          var kb = place(k, node.x, belowY);
+          if (boundsOverlap(kb, sideBounds)){
+            var dy = sideBounds.maxY + TREE_STACK_GAP - kb.minY;
+            moveSubtree(k, 0, dy);
+            kb = shiftBounds(kb, 0, dy);
+          }
+          bounds = unionBounds(bounds, kb);
+          belowY = kb.maxY + TREE_STACK_GAP;
+        });
+      }
+      placeBelow(followupKids);
+      placeBelow(notesKids);
       return bounds;
     }
     var root = nodes[rootId]; if (!root) return; place(root, 0, 0);

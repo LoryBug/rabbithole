@@ -19,6 +19,7 @@ import {
   initAskFollowups,
   registerAskHooks,
   sendFollowup,
+  sendNotesBranch,
   updateComposerState
 } from "./ask-followups.js";
 import { initPalette, registerPaletteHooks } from "./palette.js";
@@ -73,6 +74,8 @@ export function startRabbithole(hydration, options) {
     hideAsk: hideAsk,
     hidePeek: hidePeek,
     sendFollowup: sendFollowup,
+    submitCardNotes: sendNotesBranch,
+    post: post,
     confirmDelete: confirmDelete,
     persistNode: persistNode,
     persistNodesBulk: persistNodesBulk,

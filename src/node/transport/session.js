@@ -752,11 +752,31 @@ export class RabbitHoleSession {
     return { ok: true };
   }
 
+  handleNotesCreate(payload) {
+    const parentId = String(payload.parent_id || "");
+    const parent = this.nodes.get(parentId);
+    if (!parent) throw buildJsonError(`Parent node ${parentId} not found`, 404);
+    const nodeId = String(payload.node_id || "");
+    this.dispatchHoleEvent(
+      { ...payload, type: "branch_request", request_id: "", node_id: nodeId, parent_id: parentId },
+      { now: new Date().toISOString() }
+    );
+    const node = this.nodes.get(nodeId);
+    if (node) {
+      node.markdown = String(payload.markdown ?? "");
+      node.html = String(payload.html ?? "");
+    }
+    this.scheduleSave();
+    return { ok: true };
+  }
+
   async handleBrowserEvent(payload) {
     const type = String(payload?.type ?? "");
     switch (type) {
       case "branch_request":
         return this.handleBranchRequest(payload);
+      case "notes_create":
+        return this.handleNotesCreate(payload);
       case "node_update":
         return this.handleNodeUpdate(payload);
       case "nodes_update":

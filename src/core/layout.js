@@ -1,4 +1,4 @@
-import { BRANCH_FOLLOWUP, BRANCH_SELECTION, branchTypeOfNode } from "./model.js";
+import { BRANCH_FOLLOWUP, BRANCH_NOTES, BRANCH_SELECTION, branchTypeOfNode } from "./model.js";
 
 export const DEFAULT_ROOT = Object.freeze({ w: 480, h: 580 });
 export const DEFAULT_CHILD = Object.freeze({ w: 420, h: 460 });
@@ -68,7 +68,7 @@ export function subtreeBounds(node, { childrenOf, effH = null, sort = nodeOrder 
 }
 
 export function placeChild(parent, branchType, { childrenOf, effH = null, sort = nodeOrder, childSize = DEFAULT_CHILD } = {}) {
-  const type = branchType === BRANCH_SELECTION ? BRANCH_SELECTION : BRANCH_FOLLOWUP;
+  const type = branchType === BRANCH_SELECTION ? BRANCH_SELECTION : (branchType === BRANCH_NOTES ? BRANCH_NOTES : BRANCH_FOLLOWUP);
   const parentX = nodeX(parent);
   const parentY = nodeY(parent);
   const parentW = nodeW(parent);
