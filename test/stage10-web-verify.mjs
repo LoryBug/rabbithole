@@ -197,6 +197,8 @@ async function verifyCanvasBranching() {
   await page.waitForSelector(".node .katex");
   await page.waitForSelector(".node .hljs");
   await page.waitForSelector(".node .viz-show");
+  const synthModes = await page.$$eval("#synth-mode option", (options) => options.map((option) => option.value));
+  assert.deepEqual(synthModes, ["synthesis", "question_map"]);
 
   await selectText(page, "Euler identity");
   await page.waitForSelector("#ask.visible");
