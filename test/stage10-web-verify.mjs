@@ -3,9 +3,10 @@ import { spawnSync } from "node:child_process";
 import http from "node:http";
 import fs from "node:fs/promises";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { chromium } from "playwright";
 
-const ROOT = path.resolve(new URL("..", import.meta.url).pathname);
+const ROOT = path.resolve(fileURLToPath(new URL("..", import.meta.url)));
 const WEB_DIST = path.join(ROOT, "web/dist");
 const MOCK_KEY = `sk-or-v1-${"x".repeat(64)}`;
 const BAD_KEY = `sk-or-v1-${"y".repeat(64)}`;
@@ -222,6 +223,17 @@ async function verifyCanvasBranching() {
   const external = requests.filter((url) => !url.startsWith(baseUrl));
   assert(external.length > 0, "provider and key validation should have been called");
   assert(external.every((url) => url === PROVIDER_URL || url === KEY_URL), `unexpected external request(s): ${external.join(", ")}`);
+
+  const snapshotJson = await page.evaluate(() => window.__rhWebApp.exportSnapshotJsonForTest());
+  assert.equal(snapshotJson.format, "rabbithole-session-json");
+  assert.equal(snapshotJson.format_version, 1);
+  assert.equal(snapshotJson.session.title, "Web Smoke");
+  assert(JSON.stringify(snapshotJson).includes("Second branch explains the geometric view"));
+  assert(!JSON.stringify(snapshotJson).includes(MOCK_KEY), "session JSON export must not contain provider key");
+
+  const rawHoleJson = await page.evaluate(() => window.__rhWebApp.readRawHole().then((hole) => JSON.stringify(hole)));
+  assert(rawHoleJson.includes("Second branch explains the geometric view"));
+  assert(!rawHoleJson.includes(MOCK_KEY), "IndexedDB hole record must not contain provider key");
   await context.close();
 }
 

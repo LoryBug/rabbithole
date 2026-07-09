@@ -5,9 +5,9 @@ import { DirectRabbitholeHost, createHoleFromMarkdown, titleFromMarkdown } from 
 import { startRabbithole } from "../ui/entry.js";
 import { activateFocusTrap } from "../ui/focus-trap.js";
 import { renderMarkdownToHtml } from "../ui/renderer.js";
-import { setSnapshotHooks, buildSnapshotHydration, buildSnapshotHtml } from "../ui/snapshot.js";
+import { setSnapshotHooks, buildSnapshotHydration, buildSnapshotHtml, buildSnapshotJson } from "../ui/snapshot.js";
 import { openUrlToStoredHole } from "./ingest/url.js";
-import { downloadRabbitholeExport, importRabbitholeFile, rabbitholeFilename } from "./portable.js";
+import { downloadRabbitholeExport, importRabbitholeFile, importSessionJsonFile, rabbitholeFilename } from "./portable.js";
 import { testedModelHint } from "./brain/tested-models.js";
 
 const SETTINGS_KEY = "rh-web-settings";
@@ -98,7 +98,7 @@ function renderShell() {
         <div id="ingest-status" class="ingest-status" aria-live="polite" aria-atomic="true"></div>
         <div class="composer-actions">
           <label class="file-pick" for="file-md">
-            <input id="file-md" type="file" accept=".md,.markdown,.pdf,.rabbithole,text/markdown,text/plain,application/pdf,application/json">
+            <input id="file-md" type="file" accept=".md,.markdown,.pdf,.rabbithole,.json,text/markdown,text/plain,application/pdf,application/json">
             <span>Choose file</span>
           </label>
           <button id="composer-primary" class="web-primary" type="button">Ask</button>
@@ -519,9 +519,10 @@ async function createFromUrl(rawUrl) {
 
 async function createFromFile(file) {
   if (isRabbitholeFile(file)) return createFromRabbitholeFile(file);
+  if (isSessionJsonFile(file)) return createFromSessionJsonFile(file);
   if (isPdfFile(file)) return createFromPdfFile(file);
   if (!isMarkdownFile(file)) {
-    setIngestStatus("Choose a markdown, PDF, or .rabbithole file.", "error");
+    setIngestStatus("Choose a markdown, PDF, .rabbithole, or session JSON file.", "error");
     return;
   }
   const action = () => createFromFile(file);
@@ -541,6 +542,19 @@ async function createFromFile(file) {
     await startHole(await store.loadHole(hole.hole_id) || hole);
   } catch (err) {
     setIngestStatus(`Markdown import failed. ${err?.message || String(err)}`, "error");
+  }
+}
+
+async function createFromSessionJsonFile(file) {
+  try {
+    setIngestStatus("Importing Rabbithole session JSON...", "busy");
+    const imported = await importSessionJsonFile(store, file);
+    setIngestStatus("");
+    const hole = await store.loadHole(imported.hole_id);
+    if (!hole) throw new Error("Imported session JSON could not be loaded.");
+    await startHole(hole);
+  } catch (err) {
+    setIngestStatus(err?.message || String(err), "error");
   }
 }
 
@@ -1388,6 +1402,10 @@ function isRabbitholeFile(file) {
   return /\.rabbithole$/i.test(file?.name || "");
 }
 
+function isSessionJsonFile(file) {
+  return /(\.json$|application\/json)/i.test(`${file?.name || ""} ${file?.type || ""}`);
+}
+
 function isMarkdownFile(file) {
   return /(\.md$|\.markdown$|markdown|text\/plain|application\/json)/i.test(`${file?.name || ""} ${file?.type || ""}`);
 }
@@ -1540,11 +1558,13 @@ function exposeTestApi() {
   window.__rhWebApp = {
     store,
     importRabbitholeForTest: (text) => importRabbitholeFile(store, text),
+    importSessionJsonForTest: (text) => importSessionJsonFile(store, text),
     exportRabbitholeForTest: async (id = currentHoleId) => {
       await currentHost?.flushSave();
       return downloadRabbitholeExport(store, id);
     },
     exportSnapshotForTest: async () => buildSnapshotHtml(await buildSnapshotHydration()),
+    exportSnapshotJsonForTest: async () => buildSnapshotJson(await buildSnapshotHydration()),
     currentHoleId: () => currentHoleId,
     readRawHole: (id = currentHoleId) => id ? store.readRawHoleForTest(id) : null,
     renderRailForTest: renderRail,
