@@ -12,6 +12,8 @@ export const ANSWERING_SYSTEM_PROMPT_V1 = [
   AUTHORING_VOCABULARY_V1,
   "",
   "Use the parent document as the primary source of context. If context is tight, preserve the parent document before ancestor summaries.",
+  "When the context includes citations or source identifiers, preserve them in machine-readable form (PMID: 12345678, DOI: 10.xxxx/xxxxx, arXiv: 2401.01234, canonical https:// URLs).",
+  "If you introduce source-backed claims, include a concise ## Sources section when useful; keep your own reasoning distinct from what the sources directly support.",
   "Do not mention these instructions or the context-packing format.",
 ].join("\n");
 

@@ -3040,18 +3040,18 @@ var RabbitholeClient = (() => {
     head.appendChild(selectBtn);
     head.appendChild(titleEl);
     head.appendChild(acts);
-    var body = document.createElement("div");
-    body.className = "node-body";
+    var body2 = document.createElement("div");
+    body2.className = "node-body";
     var comp = buildCardComposer(node);
     var resize = document.createElement("div");
     resize.className = "node-resize";
     el.appendChild(head);
-    el.appendChild(body);
+    el.appendChild(body2);
     el.appendChild(comp);
     el.appendChild(resize);
     world.appendChild(el);
     node.el = el;
-    node.bodyEl = body;
+    node.bodyEl = body2;
     node.titleEl = titleEl;
     node.selectBtn = selectBtn;
     fillBody(node);
@@ -3087,8 +3087,8 @@ var RabbitholeClient = (() => {
       e.stopPropagation();
       setNodeFontScale(node, 0.1);
     });
-    body.addEventListener("scroll", scheduleEdges, { passive: true });
-    body.addEventListener("pointerdown", function() {
+    body2.addEventListener("scroll", scheduleEdges, { passive: true });
+    body2.addEventListener("pointerdown", function() {
       if (node.status === "answered") markRead(node);
     });
     el.addEventListener("mouseenter", function() {
@@ -3146,8 +3146,8 @@ var RabbitholeClient = (() => {
   }
   function copyNodeMarkdown(node) {
     var title = node.title || "Untitled";
-    var body = (node.md || "").trim();
-    var text2 = "# " + title + (body ? "\n\n" + body : "");
+    var body2 = (node.md || "").trim();
+    var text2 = "# " + title + (body2 ? "\n\n" + body2 : "");
     function done() {
       flashHint("Copied \u201C" + title.slice(0, 40) + (title.length > 40 ? "\u2026" : "") + "\u201D as Markdown");
     }
@@ -3315,27 +3315,27 @@ var RabbitholeClient = (() => {
     requestAnimationFrame(step);
   }
   function fillBody(node) {
-    var body = node.bodyEl;
-    if (!body) return;
-    body.innerHTML = "";
+    var body2 = node.bodyEl;
+    if (!body2) return;
+    body2.innerHTML = "";
     if (node.origin && node.origin.synthesis) {
       var sq = document.createElement("div");
       sq.className = "origin-quote";
       sq.textContent = node.origin.synthesis_mode === "question_map" ? "\u2726 Question Map from selected nodes" : "\u2726 Synthesis from selected nodes";
-      body.appendChild(sq);
+      body2.appendChild(sq);
     } else if (node.origin && node.origin.selected_text) {
       var q = document.createElement("div");
       q.className = "origin-quote";
       q.textContent = "\u201C" + node.origin.selected_text + "\u201D";
-      body.appendChild(q);
+      body2.appendChild(q);
     } else if (node.origin && (node.origin.question || node.origin.lens)) {
       var fq = document.createElement("div");
       fq.className = "origin-quote";
       fq.textContent = node.origin.lens ? "Follow-up \u2014 " + lensLabel2(node.origin.lens) : node.origin.question;
-      body.appendChild(fq);
+      body2.appendChild(fq);
     }
     var dc = buildDocContent(node, CANVAS_BASE);
-    body.appendChild(dc);
+    body2.appendChild(dc);
     applyChildHighlights(dc, node);
   }
   function setNodeFontScale(node, delta) {
@@ -3859,6 +3859,8 @@ var RabbitholeClient = (() => {
     },
     closeShare: function() {
     },
+    closeSourcesPanel: function() {
+    },
     hideConfirm: function() {
     },
     hidePeek: function() {
@@ -3875,6 +3877,7 @@ var RabbitholeClient = (() => {
         return null;
       };
       if (!c2("#sharemenu") && !c2("#r-share") && !c2("#t-share")) askHooks.closeShare();
+      if (!c2("#sources-panel") && !c2("#r-sources") && !c2("#t-sources")) askHooks.closeSourcesPanel();
       if (!c2("#confirm")) askHooks.hideConfirm();
       if (!c2("#peek") && !c2("mark[data-child]")) askHooks.hidePeek();
       if (inAsk(e)) return;
@@ -4523,6 +4526,8 @@ var RabbitholeClient = (() => {
     },
     closeShare: function() {
     },
+    closeSourcesPanel: function() {
+    },
     hideConfirm: function() {
     }
   };
@@ -4564,6 +4569,7 @@ var RabbitholeClient = (() => {
     paletteHooks.hideAsk();
     paletteHooks.hidePeek();
     paletteHooks.closeShare();
+    paletteHooks.closeSourcesPanel();
     paletteHooks.hideConfirm();
     paletteEl.classList.add("visible");
     palText.value = "";
@@ -4605,13 +4611,13 @@ var RabbitholeClient = (() => {
       var n = nodes[id];
       var title = (n.title || "").toLowerCase();
       var ask2 = ((n.origin && n.origin.selected_text || "") + " " + (n.origin && n.origin.question || "")).toLowerCase();
-      var body = getPlain(n).toLowerCase();
+      var body2 = getPlain(n).toLowerCase();
       var score = 0, ok = true;
       for (var i2 = 0; i2 < tokens.length; i2++) {
         var t = tokens[i2];
         if (title.indexOf(t) !== -1) score += title.indexOf(t) === 0 ? 40 : 30;
         else if (ask2.indexOf(t) !== -1) score += 15;
-        else if (body.indexOf(t) !== -1) score += 5;
+        else if (body2.indexOf(t) !== -1) score += 5;
         else {
           ok = false;
           break;
@@ -4677,13 +4683,13 @@ var RabbitholeClient = (() => {
     return out;
   }
   function palSnippet(n, tokens) {
-    var body = getPlain(n);
-    var lower = body.toLowerCase();
+    var body2 = getPlain(n);
+    var lower = body2.toLowerCase();
     for (var i2 = 0; i2 < tokens.length; i2++) {
       var at = lower.indexOf(tokens[i2]);
       if (at !== -1) {
         var start = Math.max(0, at - 34);
-        var slice = (start > 0 ? "\u2026" : "") + body.slice(start, start + 120);
+        var slice = (start > 0 ? "\u2026" : "") + body2.slice(start, start + 120);
         return hiTokens(slice, tokens);
       }
     }
@@ -4691,7 +4697,7 @@ var RabbitholeClient = (() => {
     if (quote) return "\u201C" + hiTokens(truncate2(quote, 90), tokens) + "\u201D";
     var q = n.origin && n.origin.question;
     if (q) return hiTokens(truncate2(q, 100), tokens);
-    return esc(truncate2(body, 100));
+    return esc(truncate2(body2, 100));
   }
   function hiTokens(text2, tokens) {
     if (!tokens.length) return esc(text2);
@@ -4750,6 +4756,245 @@ var RabbitholeClient = (() => {
     }
   }
 
+  // src/core/sources.js
+  var URL_RE = /https?:\/\/[^\s)<>'"]+/gi;
+  var PMID_RE = /(?:\bPMID\s*:?\s*|pubmed\.ncbi\.nlm\.nih\.gov\/)(\d{5,9})/gi;
+  var DOI_RE = /(?:\bDOI\s*:?\s*|https?:\/\/(?:dx\.)?doi\.org\/)(10\.\d{4,9}\/[^\s\])<>'"`]+)/gi;
+  var ARXIV_RE = /(?:\barXiv\s*:?\s*|arxiv\.org\/(?:abs|pdf)\/)(\d{4}\.\d{4,5}(?:v\d+)?|[a-z-]+\/\d{7}(?:v\d+)?)/gi;
+  function buildSourcesOverview(inputNodes) {
+    var _a2;
+    const nodeList = normalizeNodeList(inputNodes);
+    const byId = new Map(nodeList.map((node) => [node.id, node]));
+    const sources = /* @__PURE__ */ new Map();
+    const directByNode = /* @__PURE__ */ new Map();
+    for (const node of nodeList) {
+      const keys = /* @__PURE__ */ new Set();
+      const add = (source2) => {
+        if (!source2) return;
+        keys.add(source2.key);
+        upsertSource(sources, source2, node.id, "direct");
+      };
+      for (const source2 of extractSourcesFromNode(node)) add(source2);
+      directByNode.set(node.id, keys);
+    }
+    const derivedNodes = [];
+    for (const node of nodeList) {
+      const sourceIds = Array.isArray((_a2 = node.origin) == null ? void 0 : _a2.synthesis_sources) ? node.origin.synthesis_sources : [];
+      if (!sourceIds.length) continue;
+      const derivedKeys = /* @__PURE__ */ new Set();
+      for (const sourceId of sourceIds) {
+        for (const key of directByNode.get(String(sourceId)) || []) derivedKeys.add(key);
+      }
+      for (const key of derivedKeys) {
+        const source2 = sources.get(key);
+        if (source2) addUnique(source2.derived_node_ids, node.id);
+      }
+      derivedNodes.push({
+        id: node.id,
+        title: node.title,
+        source_node_ids: sourceIds.filter((id) => byId.has(String(id))).map(String),
+        source_keys: [...derivedKeys].sort()
+      });
+    }
+    const nodesWithoutSources = nodeList.filter((node) => !(directByNode.get(node.id) || /* @__PURE__ */ new Set()).size).map((node) => ({ id: node.id, title: node.title }));
+    return {
+      sources: [...sources.values()].sort(compareSources),
+      nodes_without_sources: nodesWithoutSources,
+      derived_nodes: derivedNodes
+    };
+  }
+  function extractSourcesFromNode(rawNode) {
+    const node = normalizeNode(rawNode);
+    const text2 = [node.base_url || "", node.markdown || ""].join("\n");
+    const found = /* @__PURE__ */ new Map();
+    const add = (source2) => {
+      if (source2) found.set(source2.key, source2);
+    };
+    scan(PMID_RE, text2, (match) => add(pmidSource(match[1])));
+    scan(DOI_RE, text2, (match) => add(doiSource(cleanDoi(match[1]))));
+    scan(ARXIV_RE, text2, (match) => add(arxivSource(match[1])));
+    scan(URL_RE, text2, (match) => add(urlSource(match[0])));
+    return [...found.values()].sort(compareSources);
+  }
+  function normalizeNodeList(inputNodes) {
+    const raw = Array.isArray(inputNodes) ? inputNodes : Object.values(inputNodes || {});
+    return raw.map(normalizeNode).filter((node) => node.id);
+  }
+  function normalizeNode(node) {
+    var _a2, _b;
+    return {
+      id: String((node == null ? void 0 : node.id) || ""),
+      title: String((node == null ? void 0 : node.title) || "Untitled"),
+      markdown: String((_b = (_a2 = node == null ? void 0 : node.markdown) != null ? _a2 : node == null ? void 0 : node.md) != null ? _b : ""),
+      base_url: (node == null ? void 0 : node.base_url) || null,
+      origin: (node == null ? void 0 : node.origin) || null
+    };
+  }
+  function scan(re, text2, cb) {
+    re.lastIndex = 0;
+    let match;
+    while (match = re.exec(text2)) cb(match);
+  }
+  function upsertSource(map, source2, nodeId, kind) {
+    const current = map.get(source2.key) || {
+      ...source2,
+      node_ids: [],
+      derived_node_ids: []
+    };
+    addUnique(kind === "derived" ? current.derived_node_ids : current.node_ids, nodeId);
+    map.set(source2.key, current);
+  }
+  function addUnique(list2, value) {
+    const v = String(value || "");
+    if (v && !list2.includes(v)) list2.push(v);
+  }
+  function pmidSource(value) {
+    const pmid = String(value || "").replace(/\D/g, "");
+    if (!pmid) return null;
+    return { key: `pmid:${pmid}`, type: "pmid", label: `PMID: ${pmid}`, url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` };
+  }
+  function doiSource(value) {
+    const doi = cleanDoi(value);
+    if (!doi) return null;
+    return { key: `doi:${doi.toLowerCase()}`, type: "doi", label: `DOI: ${doi}`, url: `https://doi.org/${doi}` };
+  }
+  function arxivSource(value) {
+    const id = stripTrailing(String(value || ""));
+    if (!id) return null;
+    return { key: `arxiv:${id.toLowerCase()}`, type: "arxiv", label: `arXiv: ${id}`, url: `https://arxiv.org/abs/${id}` };
+  }
+  function urlSource(value) {
+    const url = stripTrailing(String(value || ""));
+    if (!url) return null;
+    const pmid = /pubmed\.ncbi\.nlm\.nih\.gov\/(\d{5,9})/i.exec(url);
+    if (pmid) return pmidSource(pmid[1]);
+    const doi = /(?:dx\.)?doi\.org\/(10\.\d{4,9}\/.+)/i.exec(url);
+    if (doi) return doiSource(doi[1]);
+    const arxiv = /arxiv\.org\/(?:abs|pdf)\/(\d{4}\.\d{4,5}(?:v\d+)?|[a-z-]+\/\d{7}(?:v\d+)?)/i.exec(url);
+    if (arxiv) return arxivSource(arxiv[1]);
+    return { key: `url:${url}`, type: "url", label: url.replace(/^https?:\/\//, ""), url };
+  }
+  function cleanDoi(value) {
+    return stripTrailing(String(value || "").replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, ""));
+  }
+  function stripTrailing(value) {
+    return String(value || "").trim().replace(/[.,;:!?]+$/g, "").replace(/\)+$/g, "");
+  }
+  function compareSources(a, b) {
+    return `${a.type}:${a.label}`.localeCompare(`${b.type}:${b.label}`);
+  }
+
+  // src/ui/sources-panel.js
+  var panel = null;
+  var body = null;
+  var open = false;
+  var releaseTrap = null;
+  function initSourcesPanel() {
+    panel = document.getElementById("sources-panel");
+    body = document.getElementById("sources-body");
+    document.getElementById("r-sources").addEventListener("click", function(e) {
+      toggleSourcesPanel(motionSourceFromEvent(e));
+    });
+    document.getElementById("t-sources").addEventListener("click", function(e) {
+      toggleSourcesPanel(motionSourceFromEvent(e));
+    });
+    document.getElementById("sources-close").addEventListener("click", closeSourcesPanel);
+    panel.addEventListener("click", onPanelClick);
+  }
+  function closeSourcesPanel() {
+    open = false;
+    if (panel) {
+      panel.classList.remove("visible");
+      panel.setAttribute("aria-hidden", "true");
+    }
+    if (releaseTrap) {
+      releaseTrap();
+      releaseTrap = null;
+    }
+  }
+  function toggleSourcesPanel(source2) {
+    if (open) {
+      closeSourcesPanel();
+      return;
+    }
+    renderSourcesPanel(source2);
+    open = true;
+    panel.classList.add("visible");
+    panel.setAttribute("aria-hidden", "false");
+    if (releaseTrap) releaseTrap();
+    releaseTrap = activateFocusTrap(panel, { initialFocus: panel.querySelector("button"), onEscape: closeSourcesPanel });
+  }
+  function renderSourcesPanel(source2) {
+    var overview = buildSourcesOverview(nodes);
+    var html2 = "";
+    html2 += renderSources(overview.sources);
+    html2 += renderDerived(overview.derived_nodes);
+    html2 += renderUnsourced(overview.nodes_without_sources);
+    body.innerHTML = html2 || '<div class="sources-empty">No nodes yet.</div>';
+    body.dataset.source = source2 || "pointer";
+  }
+  function renderSources(sources) {
+    if (!sources.length) return '<div class="sources-section"><h4>Sources</h4><div class="sources-empty">No explicit sources found yet. Add PMID, DOI, arXiv, URLs, markdown links, or node base_url values.</div></div>';
+    var html2 = '<div class="sources-section"><h4>Sources (' + sources.length + ")</h4>";
+    for (var i2 = 0; i2 < sources.length; i2++) {
+      var source2 = sources[i2];
+      var direct = source2.node_ids || [];
+      var derived = source2.derived_node_ids || [];
+      html2 += '<div class="source-card">';
+      html2 += '<div class="source-main"><span class="source-type">' + esc(source2.type) + "</span>";
+      html2 += source2.url ? '<a class="source-label source-link" href="' + esc(source2.url) + '" target="_blank" rel="noreferrer">' + esc(source2.label) + "</a>" : '<span class="source-label">' + esc(source2.label) + "</span>";
+      html2 += "</div>";
+      html2 += '<div class="source-meta">Used directly by ' + direct.length + " node" + (direct.length === 1 ? "" : "s") + (derived.length ? ", inherited by " + derived.length + " derived node" + (derived.length === 1 ? "" : "s") : "") + ".</div>";
+      html2 += nodeButtons(direct, "Direct") + nodeButtons(derived, "Derived");
+      html2 += "</div>";
+    }
+    return html2 + "</div>";
+  }
+  function renderDerived(derived) {
+    if (!derived.length) return "";
+    var html2 = '<div class="sources-section"><h4>Derived Nodes</h4>';
+    for (var i2 = 0; i2 < derived.length; i2++) {
+      var node = derived[i2];
+      html2 += '<div class="source-node-card">';
+      html2 += '<button class="source-node" data-node="' + esc(node.id) + '">' + esc(truncate2(node.title || "Untitled", 54)) + "</button>";
+      html2 += '<div class="source-meta">Derived from ' + node.source_node_ids.length + " selected node" + (node.source_node_ids.length === 1 ? "" : "s") + " and " + node.source_keys.length + " source" + (node.source_keys.length === 1 ? "" : "s") + ".</div>";
+      html2 += nodeButtons(node.source_node_ids, "Source nodes");
+      html2 += "</div>";
+    }
+    return html2 + "</div>";
+  }
+  function renderUnsourced(nodesWithoutSources) {
+    if (!nodesWithoutSources.length) return "";
+    var html2 = '<div class="sources-section"><h4>No Explicit Sources (' + nodesWithoutSources.length + ")</h4>";
+    html2 += '<div class="source-node-list">';
+    for (var i2 = 0; i2 < nodesWithoutSources.length; i2++) {
+      var node = nodesWithoutSources[i2];
+      html2 += '<button class="source-node" data-node="' + esc(node.id) + '">' + esc(truncate2(node.title || "Untitled", 42)) + "</button>";
+    }
+    return html2 + "</div></div>";
+  }
+  function nodeButtons(ids, label) {
+    if (!ids || !ids.length) return "";
+    var html2 = '<div class="source-meta">' + esc(label) + '</div><div class="source-node-list">';
+    for (var i2 = 0; i2 < ids.length; i2++) {
+      var node = nodes[ids[i2]];
+      if (!node) continue;
+      html2 += '<button class="source-node" data-node="' + esc(node.id) + '">' + esc(truncate2(node.title || "Untitled", 42)) + "</button>";
+    }
+    return html2 + "</div>";
+  }
+  function onPanelClick(e) {
+    var btn = e.target.closest && e.target.closest("button[data-node]");
+    if (!btn) return;
+    var node = nodes[btn.dataset.node];
+    if (!node) {
+      flashHint("That node is no longer available.");
+      return;
+    }
+    closeSourcesPanel();
+    goToNode(node, body.dataset.source || "pointer");
+  }
+
   // src/core/html/shell.js
   var CANVAS_SHELL = `
 <div id="reader">
@@ -4759,6 +5004,7 @@ var RabbitholeClient = (() => {
     <button class="tool-btn" id="r-textdown" title="Smaller text">A\u2212</button>
     <button class="tool-btn" id="r-textup" title="Larger text">A+</button>
     <button class="tool-btn" id="r-canvas" title="Open the spatial canvas">\u2922 Canvas</button>
+    <button class="tool-btn" id="r-sources" title="Show sources overview">Sources</button>
     <button class="tool-btn" id="r-share" title="Share, export, synthesize">\u2197 Share</button>
     <button class="tool-btn" id="r-theme" title="Toggle theme" aria-label="Toggle theme">\u25D1</button>
     <button class="tool-btn" id="r-done" title="End the session (the hole stays saved)">Done</button>
@@ -4793,6 +5039,7 @@ var RabbitholeClient = (() => {
   <button class="tool-btn tool-icon" id="t-tidy" title="Tidy up layout \xB7 T" aria-label="Tidy up layout \xB7 T"><svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" aria-hidden="true"><rect x="6.25" y="2.5" width="3.5" height="2.75" rx="0.7"/><rect x="2.75" y="10.75" width="3.5" height="2.75" rx="0.7"/><rect x="9.75" y="10.75" width="3.5" height="2.75" rx="0.7"/><path d="M8 5.25v2.25"/><path d="M4.5 7.5h7"/><path d="M4.5 7.5v3.25"/><path d="M11.5 7.5v3.25"/></svg></button>
   <button class="tool-btn" id="t-synth-prompt" title="Synthesize selected nodes" disabled>\u25EB Synthesize <span id="t-synth-count">0</span></button>
   <span class="sep"></span>
+  <button class="tool-btn" id="t-sources" title="Show sources overview">Sources</button>
   <button class="tool-btn tool-icon" id="t-share" title="Share, export, synthesize" aria-label="Share, export, synthesize">\u2197</button>
   <button class="tool-btn tool-icon" id="t-theme" title="Toggle theme" aria-label="Toggle theme">\u25D1</button>
   <button class="tool-btn tool-icon" id="t-settings" title="Provider settings" aria-label="Provider settings" aria-controls="web-settings-modal" aria-expanded="false"><svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round" fill="none" aria-hidden="true"><path d="M6.75 2.25h2.5l.38 1.55c.38.13.74.28 1.07.47l1.35-.82 1.25 2.16-1.18 1.03c.04.22.06.45.06.68s-.02.46-.06.68l1.18 1.03-1.25 2.16-1.35-.82c-.33.19-.69.34-1.07.47l-.38 1.55h-2.5l-.38-1.55a5.1 5.1 0 0 1-1.07-.47l-1.35.82-1.25-2.16 1.18-1.03a3.9 3.9 0 0 1 0-1.36L2.75 5.61 4 3.45l1.35.82c.33-.19.69-.34 1.07-.47z"/><circle cx="8" cy="8" r="1.9"/></svg></button>
@@ -4835,6 +5082,11 @@ var RabbitholeClient = (() => {
 </div></div>
 
 <div id="peek"></div>
+
+<div id="sources-panel" aria-hidden="true">
+  <div class="sources-head"><span>Sources</span><button id="sources-close" title="Close" aria-label="Close">\xD7</button></div>
+  <div class="sources-body" id="sources-body"></div>
+</div>
 
 <div id="sharemenu">
   <button class="sm-item" id="sm-trail"><span class="sm-ic">\u2937</span>Copy trail as Markdown</button>
@@ -5225,8 +5477,8 @@ var RabbitholeClient = (() => {
   function docMarkdown(n, depth) {
     var h = "#";
     for (var i2 = 0; i2 < Math.min(depth, 3); i2++) h += "#";
-    var body = (n.md || "").trim() || "_(still being written)_";
-    return h + " " + (n.title || "Untitled") + "\n\n" + originLine(n) + body + "\n";
+    var body2 = (n.md || "").trim() || "_(still being written)_";
+    return h + " " + (n.title || "Untitled") + "\n\n" + originLine(n) + body2 + "\n";
   }
   function trailMarkdown(id) {
     var path2 = lineageNodes(id), parts = [];
@@ -5311,8 +5563,8 @@ var RabbitholeClient = (() => {
     var count = document.getElementById("t-synth-count");
     if (count) count.textContent = String(selected.length);
     if (btn) btn.disabled = closed || selected.length < 2;
-    var panel = document.getElementById("synth-panel");
-    if (panel && panel.classList.contains("visible")) {
+    var panel2 = document.getElementById("synth-panel");
+    if (panel2 && panel2.classList.contains("visible")) {
       var sc = document.getElementById("synth-count");
       if (sc) sc.textContent = String(selected.length);
       updateSynthesisPromptState();
@@ -5335,7 +5587,7 @@ var RabbitholeClient = (() => {
       goToNode(pending, source2);
       return;
     }
-    var panel = document.getElementById("synth-panel");
+    var panel2 = document.getElementById("synth-panel");
     var count = document.getElementById("synth-count");
     var text2 = document.getElementById("synth-text");
     var modeSelect = document.getElementById("synth-mode");
@@ -5343,13 +5595,13 @@ var RabbitholeClient = (() => {
     if (modeSelect && !modeSelect.value) modeSelect.value = "synthesis";
     updateSynthesisModeCopy();
     if (text2 && !text2.value.trim()) text2.value = defaultSynthesisPrompt(synthesisMode());
-    panel.classList.add("visible");
+    panel2.classList.add("visible");
     updateSynthesisPromptState();
     if (text2) text2.focus();
   }
   function closeSynthesisPrompt() {
-    var panel = document.getElementById("synth-panel");
-    if (panel) panel.classList.remove("visible");
+    var panel2 = document.getElementById("synth-panel");
+    if (panel2) panel2.classList.remove("visible");
   }
   function updateSynthesisPromptState() {
     var selected = selectedCanvasNodes();
@@ -5389,9 +5641,9 @@ var RabbitholeClient = (() => {
     if (text2) text2.value = "";
   }
   function selectedNodeMarkdown(n, index) {
-    var body = (n.md || "").trim();
-    if (body.length > 8e3) body = body.slice(0, 8e3).trimEnd() + "\n\n[truncated]";
-    return "## Source " + index + ": " + (n.title || "Untitled") + "\n\nNode ID: " + n.id + "\n\n" + (body || "_(no markdown content)_");
+    var body2 = (n.md || "").trim();
+    if (body2.length > 8e3) body2 = body2.slice(0, 8e3).trimEnd() + "\n\n[truncated]";
+    return "## Source " + index + ": " + (n.title || "Untitled") + "\n\nNode ID: " + n.id + "\n\n" + (body2 || "_(no markdown content)_");
   }
   function selectedSynthesisPosition(selected) {
     var minY = Infinity, maxY = -Infinity, maxX = -Infinity;
@@ -6947,9 +7199,9 @@ ${currentText}` : currentText;
       return '<pre><code class="language-' + escape22(langString) + '">' + (escaped ? code : escape22(code, true)) + "</code></pre>\n";
     }
     blockquote({ tokens }) {
-      const body = this.parser.parse(tokens);
+      const body2 = this.parser.parse(tokens);
       return `<blockquote>
-${body}</blockquote>
+${body2}</blockquote>
 `;
     }
     html({ text: text2 }) {
@@ -6965,14 +7217,14 @@ ${body}</blockquote>
     list(token) {
       const ordered = token.ordered;
       const start = token.start;
-      let body = "";
+      let body2 = "";
       for (let j = 0; j < token.items.length; j++) {
         const item = token.items[j];
-        body += this.listitem(item);
+        body2 += this.listitem(item);
       }
       const type = ordered ? "ol" : "ul";
       const startAttr = ordered && start !== 1 ? ' start="' + start + '"' : "";
-      return "<" + type + startAttr + ">\n" + body + "</" + type + ">\n";
+      return "<" + type + startAttr + ">\n" + body2 + "</" + type + ">\n";
     }
     listitem(item) {
       var _a2;
@@ -7016,17 +7268,17 @@ ${body}</blockquote>
         cell += this.tablecell(token.header[j]);
       }
       header += this.tablerow({ text: cell });
-      let body = "";
+      let body2 = "";
       for (let j = 0; j < token.rows.length; j++) {
         const row = token.rows[j];
         cell = "";
         for (let k = 0; k < row.length; k++) {
           cell += this.tablecell(row[k]);
         }
-        body += this.tablerow({ text: cell });
+        body2 += this.tablerow({ text: cell });
       }
-      if (body) body = `<tbody>${body}</tbody>`;
-      return "<table>\n<thead>\n" + header + "</thead>\n" + body + "</table>\n";
+      if (body2) body2 = `<tbody>${body2}</tbody>`;
+      return "<table>\n<thead>\n" + header + "</thead>\n" + body2 + "</table>\n";
     }
     tablerow({ text: text2 }) {
       return `<tr>
@@ -7204,20 +7456,20 @@ ${text2}</tr>
           }
           case "text": {
             let textToken = token;
-            let body = this.renderer.text(textToken);
+            let body2 = this.renderer.text(textToken);
             while (i2 + 1 < tokens.length && tokens[i2 + 1].type === "text") {
               textToken = tokens[++i2];
-              body += "\n" + this.renderer.text(textToken);
+              body2 += "\n" + this.renderer.text(textToken);
             }
             if (top) {
               out += this.renderer.paragraph({
                 type: "paragraph",
-                raw: body,
-                text: body,
-                tokens: [{ type: "text", raw: body, text: body, escaped: true }]
+                raw: body2,
+                text: body2,
+                tokens: [{ type: "text", raw: body2, text: body2, escaped: true }]
               });
             } else {
-              out += body;
+              out += body2;
             }
             continue;
           }
@@ -11080,7 +11332,7 @@ ${text2}</tr>
   var inner = "inner";
   var mathord = "mathord";
   var op = "op-token";
-  var open = "open";
+  var open2 = "open";
   var punct = "punct";
   var rel = "rel";
   var spacing = "spacing";
@@ -11144,9 +11396,9 @@ ${text2}</tr>
   defineSymbol(text, main, textord, "\u2021", "\\ddag");
   defineSymbol(text, main, textord, "\u2021", "\\textdaggerdbl");
   defineSymbol(math, main, close, "\u23B1", "\\rmoustache", true);
-  defineSymbol(math, main, open, "\u23B0", "\\lmoustache", true);
+  defineSymbol(math, main, open2, "\u23B0", "\\lmoustache", true);
   defineSymbol(math, main, close, "\u27EF", "\\rgroup", true);
-  defineSymbol(math, main, open, "\u27EE", "\\lgroup", true);
+  defineSymbol(math, main, open2, "\u27EE", "\\lgroup", true);
   defineSymbol(math, main, bin, "\u2213", "\\mp", true);
   defineSymbol(math, main, bin, "\u2296", "\\ominus", true);
   defineSymbol(math, main, bin, "\u228E", "\\uplus", true);
@@ -11276,9 +11528,9 @@ ${text2}</tr>
   defineSymbol(math, ams, textord, "\u2137", "\\gimel", true);
   defineSymbol(math, ams, textord, "\u03DD", "\\digamma", true);
   defineSymbol(math, ams, textord, "\u03F0", "\\varkappa");
-  defineSymbol(math, ams, open, "\u250C", "\\@ulcorner", true);
+  defineSymbol(math, ams, open2, "\u250C", "\\@ulcorner", true);
   defineSymbol(math, ams, close, "\u2510", "\\@urcorner", true);
-  defineSymbol(math, ams, open, "\u2514", "\\@llcorner", true);
+  defineSymbol(math, ams, open2, "\u2514", "\\@llcorner", true);
   defineSymbol(math, ams, close, "\u2518", "\\@lrcorner", true);
   defineSymbol(math, ams, rel, "\u2266", "\\leqq", true);
   defineSymbol(math, ams, rel, "\u2A7D", "\\leqslant", true);
@@ -11497,9 +11749,9 @@ ${text2}</tr>
   defineSymbol(math, main, bin, "\u2227", "\\wedge", true);
   defineSymbol(math, main, bin, "\u2228", "\\vee", true);
   defineSymbol(math, main, textord, "\u221A", "\\surd");
-  defineSymbol(math, main, open, "\u27E8", "\\langle", true);
-  defineSymbol(math, main, open, "\u2223", "\\lvert");
-  defineSymbol(math, main, open, "\u2225", "\\lVert");
+  defineSymbol(math, main, open2, "\u27E8", "\\langle", true);
+  defineSymbol(math, main, open2, "\u2223", "\\lvert");
+  defineSymbol(math, main, open2, "\u2225", "\\lVert");
   defineSymbol(math, main, close, "?", "?");
   defineSymbol(math, main, close, "!", "!");
   defineSymbol(math, main, close, "\u27E9", "\\rangle", true);
@@ -11557,25 +11809,25 @@ ${text2}</tr>
   defineSymbol(math, main, bin, "\u22C6", "\\star");
   defineSymbol(math, main, bin, "\u25C3", "\\triangleleft");
   defineSymbol(math, main, bin, "\u25B9", "\\triangleright");
-  defineSymbol(math, main, open, "{", "\\{");
+  defineSymbol(math, main, open2, "{", "\\{");
   defineSymbol(text, main, textord, "{", "\\{");
   defineSymbol(text, main, textord, "{", "\\textbraceleft");
   defineSymbol(math, main, close, "}", "\\}");
   defineSymbol(text, main, textord, "}", "\\}");
   defineSymbol(text, main, textord, "}", "\\textbraceright");
-  defineSymbol(math, main, open, "{", "\\lbrace");
+  defineSymbol(math, main, open2, "{", "\\lbrace");
   defineSymbol(math, main, close, "}", "\\rbrace");
-  defineSymbol(math, main, open, "[", "\\lbrack", true);
+  defineSymbol(math, main, open2, "[", "\\lbrack", true);
   defineSymbol(text, main, textord, "[", "\\lbrack", true);
   defineSymbol(math, main, close, "]", "\\rbrack", true);
   defineSymbol(text, main, textord, "]", "\\rbrack", true);
-  defineSymbol(math, main, open, "(", "\\lparen", true);
+  defineSymbol(math, main, open2, "(", "\\lparen", true);
   defineSymbol(math, main, close, ")", "\\rparen", true);
   defineSymbol(text, main, textord, "<", "\\textless", true);
   defineSymbol(text, main, textord, ">", "\\textgreater", true);
-  defineSymbol(math, main, open, "\u230A", "\\lfloor", true);
+  defineSymbol(math, main, open2, "\u230A", "\\lfloor", true);
   defineSymbol(math, main, close, "\u230B", "\\rfloor", true);
-  defineSymbol(math, main, open, "\u2308", "\\lceil", true);
+  defineSymbol(math, main, open2, "\u2308", "\\lceil", true);
   defineSymbol(math, main, close, "\u2309", "\\rceil", true);
   defineSymbol(math, main, textord, "\\", "\\backslash");
   defineSymbol(math, main, textord, "\u2223", "|");
@@ -12654,14 +12906,14 @@ ${text2}</tr>
     }
   };
   function buildHTMLUnbreakable(children, options2) {
-    var body = makeSpan(["base"], children, options2);
+    var body2 = makeSpan(["base"], children, options2);
     var strut = makeSpan(["strut"]);
-    strut.style.height = makeEm(body.height + body.depth);
-    if (body.depth) {
-      strut.style.verticalAlign = makeEm(-body.depth);
+    strut.style.height = makeEm(body2.height + body2.depth);
+    if (body2.depth) {
+      strut.style.verticalAlign = makeEm(-body2.depth);
     }
-    body.children.unshift(strut);
-    return body;
+    body2.children.unshift(strut);
+    return body2;
   }
   function buildHTML(tree, options2) {
     var tag2 = null;
@@ -12899,11 +13151,11 @@ ${text2}</tr>
     }
     return new TextNode(text2);
   };
-  var makeRow = function makeRow2(body) {
-    if (body.length === 1) {
-      return body[0];
+  var makeRow = function makeRow2(body2) {
+    if (body2.length === 1) {
+      return body2[0];
     } else {
-      return new MathNode("mrow", body);
+      return new MathNode("mrow", body2);
     }
   };
   var mathFontVariants = {
@@ -13681,15 +13933,15 @@ ${text2}</tr>
       group = assertNodeType(grp, "accent");
       base = group.base;
     }
-    var body = buildGroup$1(base, options2.havingCrampedStyle());
+    var body2 = buildGroup$1(base, options2.havingCrampedStyle());
     var mustShift = group.isShifty && isCharacterBox(base);
     var skew = 0;
     if (mustShift) {
       var _getBaseSymbol$skew, _getBaseSymbol;
-      skew = (_getBaseSymbol$skew = (_getBaseSymbol = getBaseSymbol(body)) == null ? void 0 : _getBaseSymbol.skew) != null ? _getBaseSymbol$skew : 0;
+      skew = (_getBaseSymbol$skew = (_getBaseSymbol = getBaseSymbol(body2)) == null ? void 0 : _getBaseSymbol.skew) != null ? _getBaseSymbol$skew : 0;
     }
     var accentBelow = group.label === "\\c";
-    var clearance = accentBelow ? body.height + body.depth : Math.min(body.height, options2.fontMetrics().xHeight);
+    var clearance = accentBelow ? body2.height + body2.depth : Math.min(body2.height, options2.fontMetrics().xHeight);
     var accentBody;
     if (!group.isStretchy) {
       var accent2;
@@ -13714,7 +13966,7 @@ ${text2}</tr>
       var accentFull = group.label === "\\textcircled";
       if (accentFull) {
         accentBody.classes.push("accent-full");
-        clearance = body.height;
+        clearance = body2.height;
       }
       var left = skew;
       if (!accentFull) {
@@ -13728,7 +13980,7 @@ ${text2}</tr>
         positionType: "firstBaseline",
         children: [{
           type: "elem",
-          elem: body
+          elem: body2
         }, {
           type: "kern",
           size: -clearance
@@ -13743,7 +13995,7 @@ ${text2}</tr>
         positionType: "firstBaseline",
         children: [{
           type: "elem",
-          elem: body
+          elem: body2
         }, {
           type: "elem",
           elem: accentBody,
@@ -14038,13 +14290,13 @@ ${text2}</tr>
         parser: parser2,
         funcName
       } = _ref;
-      var body = args[0];
+      var body2 = args[0];
       return {
         type: "mclass",
         mode: parser2.mode,
         mclass: "m" + funcName.slice(5),
-        body: ordargument(body),
-        isCharacterBox: isCharacterBox(body)
+        body: ordargument(body2),
+        isCharacterBox: isCharacterBox(body2)
       };
     },
     htmlBuilder: htmlBuilder$9,
@@ -14239,7 +14491,7 @@ ${text2}</tr>
       }
     }
     var row = [];
-    var body = [row];
+    var body2 = [row];
     for (var i2 = 0; i2 < parsedRows.length; i2++) {
       var rowNodes = parsedRows[i2];
       var cell = newCell();
@@ -14302,11 +14554,11 @@ ${text2}</tr>
         row.shift();
       }
       row = [];
-      body.push(row);
+      body2.push(row);
     }
     parser2.gullet.endGroup();
     parser2.gullet.endGroup();
-    var cols = new Array(body[0].length).fill({
+    var cols = new Array(body2[0].length).fill({
       type: "align",
       align: "c",
       pregap: 0.25,
@@ -14317,13 +14569,13 @@ ${text2}</tr>
     return {
       type: "array",
       mode: "math",
-      body,
+      body: body2,
       arraystretch: 1,
       addJot: true,
       rowGaps: [null],
       cols,
       colSeparationType: "CD",
-      hLinesBeforeRow: new Array(body.length + 1).fill([])
+      hLinesBeforeRow: new Array(body2.length + 1).fill([])
     };
   }
   defineFunction({
@@ -14444,12 +14696,12 @@ ${text2}</tr>
         parser: parser2
       } = _ref;
       var color = assertNodeType(args[0], "color-token").color;
-      var body = args[1];
+      var body2 = args[1];
       return {
         type: "color",
         mode: parser2.mode,
         color,
-        body: ordargument(body)
+        body: ordargument(body2)
       };
     },
     htmlBuilder: htmlBuilder$8,
@@ -14468,12 +14720,12 @@ ${text2}</tr>
       } = _ref2;
       var color = assertNodeType(args[0], "color-token").color;
       parser2.gullet.macros.set("\\current@color", color);
-      var body = parser2.parseExpression(true, breakOnTokenText);
+      var body2 = parser2.parseExpression(true, breakOnTokenText);
       return {
         type: "color",
         mode: parser2.mode,
         color,
-        body
+        body: body2
       };
     }
   });
@@ -15336,14 +15588,14 @@ ${text2}</tr>
       var delim = checkDelimiter(args[0], context);
       var parser2 = context.parser;
       ++parser2.leftrightDepth;
-      var body = parser2.parseExpression(false);
+      var body2 = parser2.parseExpression(false);
       --parser2.leftrightDepth;
       parser2.expect("\\right", false);
       var right = assertNodeType(parser2.parseFunction(), "leftright-right");
       return {
         type: "leftright",
         mode: parser2.mode,
-        body,
+        body: body2,
         left: delim.text,
         right: right.delim,
         rightColor: right.color
@@ -15636,13 +15888,13 @@ ${text2}</tr>
         funcName
       } = _ref;
       var color = assertNodeType(args[0], "color-token").color;
-      var body = args[1];
+      var body2 = args[1];
       return {
         type: "enclose",
         mode: parser2.mode,
         label: funcName,
         backgroundColor: color,
-        body
+        body: body2
       };
     },
     htmlBuilder: htmlBuilder$7,
@@ -15661,14 +15913,14 @@ ${text2}</tr>
       } = _ref2;
       var borderColor = assertNodeType(args[0], "color-token").color;
       var backgroundColor = assertNodeType(args[1], "color-token").color;
-      var body = args[2];
+      var body2 = args[2];
       return {
         type: "enclose",
         mode: parser2.mode,
         label: funcName,
         backgroundColor,
         borderColor,
-        body
+        body: body2
       };
     }
   });
@@ -15699,12 +15951,12 @@ ${text2}</tr>
         parser: parser2,
         funcName
       } = _ref4;
-      var body = args[0];
+      var body2 = args[0];
       return {
         type: "enclose",
         mode: parser2.mode,
         label: funcName,
-        body
+        body: body2
       };
     }
   });
@@ -15721,12 +15973,12 @@ ${text2}</tr>
       if (parser2.mode === "math") {
         parser2.settings.reportNonstrict("mathVsSout", "LaTeX's \\sout works only in text mode");
       }
-      var body = args[0];
+      var body2 = args[0];
       return {
         type: "enclose",
         mode: parser2.mode,
         label: funcName,
-        body
+        body: body2
       };
     }
   });
@@ -15776,8 +16028,8 @@ ${text2}</tr>
     }
   }
   var _macros = {};
-  function defineMacro(name, body) {
-    _macros[name] = body;
+  function defineMacro(name, body2) {
+    _macros[name] = body2;
   }
   var SourceLocation = class _SourceLocation {
     // End offset, zero-based exclusive.
@@ -15884,7 +16136,7 @@ ${text2}</tr>
     }
     parser2.gullet.beginGroup();
     var row = [];
-    var body = [row];
+    var body2 = [row];
     var rowGaps = [];
     var hLinesBeforeRow = [];
     var tags = autoTag != null ? [] : void 0;
@@ -15936,10 +16188,10 @@ ${text2}</tr>
         parser2.consume();
       } else if (next === "\\end") {
         endRow();
-        if (row.length === 1 && cell.type === "styling" && cell.body.length === 1 && cell.body[0].type === "ordgroup" && cell.body[0].body.length === 0 && (body.length > 1 || !emptySingleRow)) {
-          body.pop();
+        if (row.length === 1 && cell.type === "styling" && cell.body.length === 1 && cell.body[0].type === "ordgroup" && cell.body[0].body.length === 0 && (body2.length > 1 || !emptySingleRow)) {
+          body2.pop();
         }
-        if (hLinesBeforeRow.length < body.length + 1) {
+        if (hLinesBeforeRow.length < body2.length + 1) {
           hLinesBeforeRow.push([]);
         }
         break;
@@ -15953,7 +16205,7 @@ ${text2}</tr>
         endRow();
         hLinesBeforeRow.push(getHLines(parser2));
         row = [];
-        body.push(row);
+        body2.push(row);
         beginRow();
       } else {
         throw new ParseError("Expected & or \\\\ or \\cr or \\end", parser2.nextToken);
@@ -15966,7 +16218,7 @@ ${text2}</tr>
       mode: parser2.mode,
       addJot,
       arraystretch,
-      body,
+      body: body2,
       cols,
       rowGaps,
       hskipBeforeAndAfter,
@@ -15989,7 +16241,7 @@ ${text2}</tr>
     var nr = group.body.length;
     var hLinesBeforeRow = group.hLinesBeforeRow;
     var nc = 0;
-    var body = new Array(nr);
+    var body2 = new Array(nr);
     var hlines = [];
     var ruleThickness = Math.max(
       // From LaTeX \showthe\arrayrulewidth. Equals 0.04 em.
@@ -16066,7 +16318,7 @@ ${text2}</tr>
       totalHeight += height;
       outrow.pos = totalHeight;
       totalHeight += depth + gap;
-      body[r2] = outrow;
+      body2[r2] = outrow;
       setHLinePos(hLinesBeforeRow[r2 + 1]);
     }
     var offset = totalHeight / 2 + options2.fontMetrics().axisHeight;
@@ -16077,7 +16329,7 @@ ${text2}</tr>
     var tagSpans = [];
     if (group.tags && group.tags.some((tag3) => tag3)) {
       for (r2 = 0; r2 < nr; ++r2) {
-        var rw = body[r2];
+        var rw = body2[r2];
         var shift = rw.pos - offset;
         var tag2 = group.tags[r2];
         var tagSpan = void 0;
@@ -16148,7 +16400,7 @@ ${text2}</tr>
       }
       var colElems = [];
       for (r2 = 0; r2 < nr; ++r2) {
-        var row = body[r2];
+        var row = body2[r2];
         var elem = row.cells[c2];
         if (!elem) {
           continue;
@@ -16767,13 +17019,13 @@ ${text2}</tr>
         parser: parser2,
         funcName
       } = _ref;
-      var body = normalizeArgument(args[0]);
+      var body2 = normalizeArgument(args[0]);
       var func = funcName in fontAliases ? fontAliases[funcName] : funcName;
       return {
         type: "font",
         mode: parser2.mode,
         font: func.slice(1),
-        body
+        body: body2
       };
     },
     htmlBuilder: htmlBuilder$5,
@@ -16787,18 +17039,18 @@ ${text2}</tr>
       var {
         parser: parser2
       } = _ref2;
-      var body = args[0];
+      var body2 = args[0];
       return {
         type: "mclass",
         mode: parser2.mode,
-        mclass: binrelClass(body),
+        mclass: binrelClass(body2),
         body: [{
           type: "font",
           mode: parser2.mode,
           font: "boldsymbol",
-          body
+          body: body2
         }],
-        isCharacterBox: isCharacterBox(body)
+        isCharacterBox: isCharacterBox(body2)
       };
     }
   });
@@ -16816,7 +17068,7 @@ ${text2}</tr>
       var {
         mode: mode2
       } = parser2;
-      var body = parser2.parseExpression(true, breakOnTokenText);
+      var body2 = parser2.parseExpression(true, breakOnTokenText);
       return {
         type: "font",
         mode: mode2,
@@ -16824,7 +17076,7 @@ ${text2}</tr>
         body: {
           type: "ordgroup",
           mode: parser2.mode,
-          body
+          body: body2
         }
       };
     }
@@ -17229,7 +17481,7 @@ ${text2}</tr>
     } else {
       group = assertNodeType(grp, "horizBrace");
     }
-    var body = buildGroup$1(group.base, options2.havingBaseStyle(Style$1.DISPLAY));
+    var body2 = buildGroup$1(group.base, options2.havingBaseStyle(Style$1.DISPLAY));
     var braceBody = stretchySvg(group, options2);
     var vlist;
     if (group.isOver) {
@@ -17237,7 +17489,7 @@ ${text2}</tr>
         positionType: "firstBaseline",
         children: [{
           type: "elem",
-          elem: body
+          elem: body2
         }, {
           type: "kern",
           size: 0.1
@@ -17250,7 +17502,7 @@ ${text2}</tr>
     } else {
       vlist = makeVList({
         positionType: "bottom",
-        positionData: body.depth + 0.1 + braceBody.height,
+        positionData: body2.depth + 0.1 + braceBody.height,
         children: [{
           type: "elem",
           elem: braceBody,
@@ -17260,7 +17512,7 @@ ${text2}</tr>
           size: 0.1
         }, {
           type: "elem",
-          elem: body
+          elem: body2
         }]
       });
     }
@@ -17333,7 +17585,7 @@ ${text2}</tr>
       var {
         parser: parser2
       } = _ref;
-      var body = args[1];
+      var body2 = args[1];
       var href = assertNodeType(args[0], "url").url;
       if (!parser2.settings.isTrusted({
         command: "\\href",
@@ -17345,7 +17597,7 @@ ${text2}</tr>
         type: "href",
         mode: parser2.mode,
         href,
-        body: ordargument(body)
+        body: ordargument(body2)
       };
     },
     htmlBuilder: (group, options2) => {
@@ -17390,7 +17642,7 @@ ${text2}</tr>
           text: c2
         });
       }
-      var body = {
+      var body2 = {
         type: "text",
         mode: parser2.mode,
         font: "\\texttt",
@@ -17400,7 +17652,7 @@ ${text2}</tr>
         type: "href",
         mode: parser2.mode,
         href,
-        body: ordargument(body)
+        body: ordargument(body2)
       };
     }
   });
@@ -17442,7 +17694,7 @@ ${text2}</tr>
         token
       } = _ref;
       var value = assertNodeType(args[0], "raw").string;
-      var body = args[1];
+      var body2 = args[1];
       if (parser2.settings.strict) {
         parser2.settings.reportNonstrict("htmlExtension", "HTML extension is disabled on strict mode");
       }
@@ -17498,7 +17750,7 @@ ${text2}</tr>
         type: "html",
         mode: parser2.mode,
         attributes,
-        body: ordargument(body)
+        body: ordargument(body2)
       };
     },
     htmlBuilder: (group, options2) => {
@@ -17733,12 +17985,12 @@ ${text2}</tr>
         parser: parser2,
         funcName
       } = _ref;
-      var body = args[0];
+      var body2 = args[0];
       return {
         type: "lap",
         mode: parser2.mode,
         alignment: funcName.slice(5),
-        body
+        body: body2
       };
     },
     htmlBuilder: (group, options2) => {
@@ -17784,7 +18036,7 @@ ${text2}</tr>
       var outerMode = parser2.mode;
       parser2.switchMode("math");
       var close2 = funcName === "\\(" ? "\\)" : "$";
-      var body = parser2.parseExpression(false, close2);
+      var body2 = parser2.parseExpression(false, close2);
       parser2.expect(close2);
       parser2.switchMode(outerMode);
       return {
@@ -17792,7 +18044,7 @@ ${text2}</tr>
         mode: parser2.mode,
         style: "text",
         resetFont: true,
-        body
+        body: body2
       };
     }
   });
@@ -17840,13 +18092,13 @@ ${text2}</tr>
       };
     },
     htmlBuilder: (group, options2) => {
-      var body = chooseMathStyle(group, options2);
-      var elements = buildExpression$1(body, options2, false);
+      var body2 = chooseMathStyle(group, options2);
+      var elements = buildExpression$1(body2, options2, false);
       return makeFragment(elements);
     },
     mathmlBuilder: (group, options2) => {
-      var body = chooseMathStyle(group, options2);
-      return buildExpressionRow(body, options2);
+      var body2 = chooseMathStyle(group, options2);
+      return buildExpressionRow(body2, options2);
     }
   });
   var assembleSupSub = (base, supGroup, subGroup, options2, style, slant, baseShift) => {
@@ -18098,14 +18350,14 @@ ${text2}</tr>
       var {
         parser: parser2
       } = _ref2;
-      var body = args[0];
+      var body2 = args[0];
       return {
         type: "op",
         mode: parser2.mode,
         limits: false,
         parentIsSupSub: false,
         symbol: false,
-        body: ordargument(body)
+        body: ordargument(body2)
       };
     }
   });
@@ -18194,7 +18446,7 @@ ${text2}</tr>
     }
     var base;
     if (group.body.length > 0) {
-      var body = group.body.map((child2) => {
+      var body2 = group.body.map((child2) => {
         var childText = "text" in child2 ? child2.text : void 0;
         if (typeof childText === "string") {
           return {
@@ -18206,7 +18458,7 @@ ${text2}</tr>
           return child2;
         }
       });
-      var expression = buildExpression$1(body, options2.withFont("mathrm"), true);
+      var expression = buildExpression$1(body2, options2.withFont("mathrm"), true);
       for (var i2 = 0; i2 < expression.length; i2++) {
         var child = expression[i2];
         if (child instanceof SymbolNode) {
@@ -18275,11 +18527,11 @@ ${text2}</tr>
         parser: parser2,
         funcName
       } = _ref;
-      var body = args[0];
+      var body2 = args[0];
       return {
         type: "operatorname",
         mode: parser2.mode,
-        body: ordargument(body),
+        body: ordargument(body2),
         alwaysHandleSupSub: funcName === "\\operatornamewithlimits",
         limits: false,
         parentIsSupSub: false
@@ -18309,11 +18561,11 @@ ${text2}</tr>
       var {
         parser: parser2
       } = _ref;
-      var body = args[0];
+      var body2 = args[0];
       return {
         type: "overline",
         mode: parser2.mode,
-        body
+        body: body2
       };
     },
     htmlBuilder(group, options2) {
@@ -18355,11 +18607,11 @@ ${text2}</tr>
       var {
         parser: parser2
       } = _ref;
-      var body = args[0];
+      var body2 = args[0];
       return {
         type: "phantom",
         mode: parser2.mode,
-        body: ordargument(body)
+        body: ordargument(body2)
       };
     },
     htmlBuilder: (group, options2) => {
@@ -18381,11 +18633,11 @@ ${text2}</tr>
       var {
         parser: parser2
       } = _ref2;
-      var body = args[0];
+      var body2 = args[0];
       return {
         type: "vphantom",
         mode: parser2.mode,
-        body
+        body: body2
       };
     },
     htmlBuilder: (group, options2) => {
@@ -18412,23 +18664,23 @@ ${text2}</tr>
         parser: parser2
       } = _ref;
       var amount = assertNodeType(args[0], "size").value;
-      var body = args[1];
+      var body2 = args[1];
       return {
         type: "raisebox",
         mode: parser2.mode,
         dy: amount,
-        body
+        body: body2
       };
     },
     htmlBuilder(group, options2) {
-      var body = buildGroup$1(group.body, options2);
+      var body2 = buildGroup$1(group.body, options2);
       var dy = calculateSize(group.dy, options2);
       return makeVList({
         positionType: "shift",
         positionData: -dy,
         children: [{
           type: "elem",
-          elem: body
+          elem: body2
         }]
       });
     },
@@ -18543,13 +18795,13 @@ ${text2}</tr>
         funcName,
         parser: parser2
       } = _ref;
-      var body = parser2.parseExpression(false, breakOnTokenText);
+      var body2 = parser2.parseExpression(false, breakOnTokenText);
       return {
         type: "sizing",
         mode: parser2.mode,
         // Figure out what size to use based on the list of functions above
         size: sizeFuncs.indexOf(funcName) + 1,
-        body
+        body: body2
       };
     },
     htmlBuilder: htmlBuilder2,
@@ -18593,11 +18845,11 @@ ${text2}</tr>
         smashHeight = true;
         smashDepth = true;
       }
-      var body = args[0];
+      var body2 = args[0];
       return {
         type: "smash",
         mode: parser2.mode,
-        body,
+        body: body2,
         smashHeight,
         smashDepth
       };
@@ -18656,11 +18908,11 @@ ${text2}</tr>
         parser: parser2
       } = _ref;
       var index = optArgs[0];
-      var body = args[0];
+      var body2 = args[0];
       return {
         type: "sqrt",
         mode: parser2.mode,
-        body,
+        body: body2,
         index
       };
     },
@@ -18689,7 +18941,7 @@ ${text2}</tr>
       }
       var imgShift = img.height - inner2.height - lineClearance - ruleWidth;
       inner2.style.paddingLeft = makeEm(advanceWidth);
-      var body = makeVList({
+      var body2 = makeVList({
         positionType: "firstBaseline",
         children: [{
           type: "elem",
@@ -18707,11 +18959,11 @@ ${text2}</tr>
         }]
       });
       if (!group.index) {
-        return makeSpan(["mord", "sqrt"], [body], options2);
+        return makeSpan(["mord", "sqrt"], [body2], options2);
       } else {
         var newOptions = options2.havingStyle(Style$1.SCRIPTSCRIPT);
         var rootm = buildGroup$1(group.index, newOptions, options2);
-        var toShift = 0.6 * (body.height - body.depth);
+        var toShift = 0.6 * (body2.height - body2.depth);
         var rootVList = makeVList({
           positionType: "shift",
           positionData: -toShift,
@@ -18721,15 +18973,15 @@ ${text2}</tr>
           }]
         });
         var rootVListWrap = makeSpan(["root"], [rootVList]);
-        return makeSpan(["mord", "sqrt"], [rootVListWrap, body], options2);
+        return makeSpan(["mord", "sqrt"], [rootVListWrap, body2], options2);
       }
     },
     mathmlBuilder(group, options2) {
       var {
-        body,
+        body: body2,
         index
       } = group;
-      return index ? new MathNode("mroot", [buildGroup2(body, options2), buildGroup2(index, options2)]) : new MathNode("msqrt", [buildGroup2(body, options2)]);
+      return index ? new MathNode("mroot", [buildGroup2(body2, options2), buildGroup2(index, options2)]) : new MathNode("msqrt", [buildGroup2(body2, options2)]);
     }
   });
   var styleMap = {
@@ -18753,7 +19005,7 @@ ${text2}</tr>
         funcName,
         parser: parser2
       } = _ref;
-      var body = parser2.parseExpression(true, breakOnTokenText);
+      var body2 = parser2.parseExpression(true, breakOnTokenText);
       var style = funcName.slice(1, funcName.length - 5);
       if (!isStyleStr(style)) {
         throw new Error("Unknown style: " + style);
@@ -18764,7 +19016,7 @@ ${text2}</tr>
         // Figure out what style to use by pulling out the style from
         // the function name
         style,
-        body
+        body: body2
       };
     },
     htmlBuilder(group, options2) {
@@ -19155,11 +19407,11 @@ ${text2}</tr>
         parser: parser2,
         funcName
       } = _ref;
-      var body = args[0];
+      var body2 = args[0];
       return {
         type: "text",
         mode: parser2.mode,
-        body: ordargument(body),
+        body: ordargument(body2),
         font: funcName
       };
     },
@@ -19237,15 +19489,15 @@ ${text2}</tr>
       };
     },
     htmlBuilder(group, options2) {
-      var body = buildGroup$1(group.body, options2);
+      var body2 = buildGroup$1(group.body, options2);
       var axisHeight = options2.fontMetrics().axisHeight;
-      var dy = 0.5 * (body.height - axisHeight - (body.depth + axisHeight));
+      var dy = 0.5 * (body2.height - axisHeight - (body2.depth + axisHeight));
       return makeVList({
         positionType: "shift",
         positionData: dy,
         children: [{
           type: "elem",
-          elem: body
+          elem: body2
         }]
       });
     },
@@ -19264,16 +19516,16 @@ ${text2}</tr>
     },
     htmlBuilder(group, options2) {
       var text2 = makeVerb(group);
-      var body = [];
+      var body2 = [];
       var newOptions = options2.havingStyle(options2.style.text());
       for (var i2 = 0; i2 < text2.length; i2++) {
         var c2 = text2[i2];
         if (c2 === "~") {
           c2 = "\\textasciitilde";
         }
-        body.push(makeSymbol(c2, "Typewriter-Regular", group.mode, newOptions, ["mord", "texttt"]));
+        body2.push(makeSymbol(c2, "Typewriter-Regular", group.mode, newOptions, ["mord", "texttt"]));
       }
-      return makeSpan(["mord", "text"].concat(newOptions.sizingClasses(options2)), tryCombineChars(body), newOptions);
+      return makeSpan(["mord", "text"].concat(newOptions.sizingClasses(options2)), tryCombineChars(body2), newOptions);
     },
     mathmlBuilder(group, options2) {
       var text2 = new TextNode(makeVerb(group));
@@ -21104,7 +21356,7 @@ ${text2}</tr>
      *                     expression.
      */
     parseExpression(breakOnInfix, breakOnTokenText) {
-      var body = [];
+      var body2 = [];
       while (true) {
         if (this.mode === "math") {
           this.consumeSpaces();
@@ -21125,12 +21377,12 @@ ${text2}</tr>
         } else if (atom.type === "internal") {
           continue;
         }
-        body.push(atom);
+        body2.push(atom);
       }
       if (this.mode === "text") {
-        this.formLigatures(body);
+        this.formLigatures(body2);
       }
-      return this.handleInfixNodes(body);
+      return this.handleInfixNodes(body2);
     }
     /**
      * Rewrites infix operators such as \over with corresponding commands such
@@ -21139,11 +21391,11 @@ ${text2}</tr>
      * There can only be one infix operator per group.  If there's more than one
      * then the expression is ambiguous.  This can be resolved by adding {}.
      */
-    handleInfixNodes(body) {
+    handleInfixNodes(body2) {
       var overIndex = -1;
       var funcName;
-      for (var i2 = 0; i2 < body.length; i2++) {
-        var node = body[i2];
+      for (var i2 = 0; i2 < body2.length; i2++) {
+        var node = body2[i2];
         if (node.type === "infix") {
           if (overIndex !== -1) {
             throw new ParseError("only one infix operator per group", node.token);
@@ -21155,8 +21407,8 @@ ${text2}</tr>
       if (overIndex !== -1 && funcName) {
         var numerNode;
         var denomNode;
-        var numerBody = body.slice(0, overIndex);
-        var denomBody = body.slice(overIndex + 1);
+        var numerBody = body2.slice(0, overIndex);
+        var denomBody = body2.slice(overIndex + 1);
         if (numerBody.length === 1 && numerBody[0].type === "ordgroup") {
           numerNode = numerBody[0];
         } else {
@@ -21177,13 +21429,13 @@ ${text2}</tr>
         }
         var _node;
         if (funcName === "\\\\abovefrac") {
-          _node = this.callFunction(funcName, [numerNode, body[overIndex], denomNode], []);
+          _node = this.callFunction(funcName, [numerNode, body2[overIndex], denomNode], []);
         } else {
           _node = this.callFunction(funcName, [numerNode, denomNode], []);
         }
         return [_node];
       } else {
-        return body;
+        return body2;
       }
     }
     /**
@@ -21307,18 +21559,18 @@ ${text2}</tr>
             subsupTokens.unshift(new Token(uSubsAndSups[token]));
             this.consume();
           }
-          var body = this.subparse(subsupTokens);
+          var body2 = this.subparse(subsupTokens);
           if (isSub) {
             subscript = {
               type: "ordgroup",
               mode: "math",
-              body
+              body: body2
             };
           } else {
             superscript = {
               type: "ordgroup",
               mode: "math",
-              body
+              body: body2
             };
           }
         } else {
@@ -21992,8 +22244,8 @@ ${text2}</tr>
   };
 
   // node_modules/highlight.js/es/core.js
-  var import_core8 = __toESM(require_core(), 1);
-  var core_default = import_core8.default;
+  var import_core9 = __toESM(require_core(), 1);
+  var core_default = import_core9.default;
 
   // node_modules/highlight.js/es/languages/bash.js
   function bash(hljs) {
@@ -31717,11 +31969,11 @@ ${text2}</tr>
             return match.index + (match[0][0] === "\n" ? 1 : 0);
           },
           tokenizer(src) {
-            const open2 = /^(?: {0,3})(`{3,})([^\n`]*)?(?:\n|$)/.exec(src);
-            if (!open2) return void 0;
-            const language = normalizeFenceLanguage(open2[2] || "").toLowerCase();
+            const open3 = /^(?: {0,3})(`{3,})([^\n`]*)?(?:\n|$)/.exec(src);
+            if (!open3) return void 0;
+            const language = normalizeFenceLanguage(open3[2] || "").toLowerCase();
             if (!VISUAL_FENCE_LANGUAGES.has(language)) return void 0;
-            if (findClosingFence(src, open2[1], open2[0].length) !== -1) return void 0;
+            if (findClosingFence(src, open3[1], open3[0].length) !== -1) return void 0;
             return { type: "visualFencePending", raw: src, language };
           },
           renderer(token) {
@@ -32411,6 +32663,7 @@ ${text2}</tr>
     registerAskHooks({
       post,
       closeShare,
+      closeSourcesPanel,
       hideConfirm,
       hidePeek
     });
@@ -32418,6 +32671,7 @@ ${text2}</tr>
       hideAsk,
       hidePeek,
       closeShare,
+      closeSourcesPanel,
       hideConfirm
     });
     registerBranchHooks({
@@ -32428,6 +32682,7 @@ ${text2}</tr>
     initCanvasView();
     initAskFollowups();
     initPalette();
+    initSourcesPanel();
     initBranchSurfaces();
     initTransportStatus();
     initChrome({ connectSse, post, refreshStatus });

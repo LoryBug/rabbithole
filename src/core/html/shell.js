@@ -11,6 +11,7 @@ export const CANVAS_SHELL = `
     <button class="tool-btn" id="r-textdown" title="Smaller text">A−</button>
     <button class="tool-btn" id="r-textup" title="Larger text">A+</button>
     <button class="tool-btn" id="r-canvas" title="Open the spatial canvas">⤢ Canvas</button>
+    <button class="tool-btn" id="r-sources" title="Show sources overview">Sources</button>
     <button class="tool-btn" id="r-share" title="Share, export, synthesize">↗ Share</button>
     <button class="tool-btn" id="r-theme" title="Toggle theme" aria-label="Toggle theme">◑</button>
     <button class="tool-btn" id="r-done" title="End the session (the hole stays saved)">Done</button>
@@ -45,6 +46,7 @@ export const CANVAS_SHELL = `
   <button class="tool-btn tool-icon" id="t-tidy" title="Tidy up layout · T" aria-label="Tidy up layout · T"><svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" aria-hidden="true"><rect x="6.25" y="2.5" width="3.5" height="2.75" rx="0.7"/><rect x="2.75" y="10.75" width="3.5" height="2.75" rx="0.7"/><rect x="9.75" y="10.75" width="3.5" height="2.75" rx="0.7"/><path d="M8 5.25v2.25"/><path d="M4.5 7.5h7"/><path d="M4.5 7.5v3.25"/><path d="M11.5 7.5v3.25"/></svg></button>
   <button class="tool-btn" id="t-synth-prompt" title="Synthesize selected nodes" disabled>◫ Synthesize <span id="t-synth-count">0</span></button>
   <span class="sep"></span>
+  <button class="tool-btn" id="t-sources" title="Show sources overview">Sources</button>
   <button class="tool-btn tool-icon" id="t-share" title="Share, export, synthesize" aria-label="Share, export, synthesize">↗</button>
   <button class="tool-btn tool-icon" id="t-theme" title="Toggle theme" aria-label="Toggle theme">◑</button>
   <button class="tool-btn tool-icon" id="t-settings" title="Provider settings" aria-label="Provider settings" aria-controls="web-settings-modal" aria-expanded="false"><svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.45" stroke-linecap="round" stroke-linejoin="round" fill="none" aria-hidden="true"><path d="M6.75 2.25h2.5l.38 1.55c.38.13.74.28 1.07.47l1.35-.82 1.25 2.16-1.18 1.03c.04.22.06.45.06.68s-.02.46-.06.68l1.18 1.03-1.25 2.16-1.35-.82c-.33.19-.69.34-1.07.47l-.38 1.55h-2.5l-.38-1.55a5.1 5.1 0 0 1-1.07-.47l-1.35.82-1.25-2.16 1.18-1.03a3.9 3.9 0 0 1 0-1.36L2.75 5.61 4 3.45l1.35.82c.33-.19.69-.34 1.07-.47z"/><circle cx="8" cy="8" r="1.9"/></svg></button>
@@ -87,6 +89,11 @@ export const CANVAS_SHELL = `
 </div></div>
 
 <div id="peek"></div>
+
+<div id="sources-panel" aria-hidden="true">
+  <div class="sources-head"><span>Sources</span><button id="sources-close" title="Close" aria-label="Close">×</button></div>
+  <div class="sources-body" id="sources-body"></div>
+</div>
 
 <div id="sharemenu">
   <button class="sm-item" id="sm-trail"><span class="sm-ic">⤷</span>Copy trail as Markdown</button>

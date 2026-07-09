@@ -36,6 +36,8 @@ const server = new McpServer(
       "Answer authoring:",
       "- Use GFM markdown, $...$/$$...$$ or \\(...\\)/\\[...\\] math, and highlighted language-tagged code fences.",
       "- For local images that are not on the web, pass assets and reference them as ![alt](asset:name.png).",
+      "- Citation discipline: when relying on external sources, preserve machine-readable identifiers such as PMID: 12345678, DOI: 10.xxxx/xxxxx, arXiv: 2401.01234, and canonical https:// URLs.",
+      "- When useful, include a concise ## Sources section. Keep cited source claims distinct from your own synthesis or inference.",
       "- For spatial structure, use ```show fences with HTML/CSS/inline-SVG only; scripts are stripped.",
       "- Stream prose in 1-3 sentence chunks, but send each visual fence contiguously so it renders when closed.",
     ].join("\n"),
