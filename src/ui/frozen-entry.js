@@ -22,6 +22,7 @@ import {
   updateComposerState
 } from "./ask-followups.js";
 import { initPalette, registerPaletteHooks } from "./palette.js";
+import { initSourcesPanel, closeSourcesPanel } from "./sources-panel.js";
 import {
   closeShare,
   confirmDelete,
@@ -75,6 +76,7 @@ export function startRabbithole(hydration) {
   registerAskHooks({
     post: post,
     closeShare: closeShare,
+    closeSourcesPanel: closeSourcesPanel,
     hideConfirm: hideConfirm,
     hidePeek: hidePeek
   });
@@ -82,6 +84,7 @@ export function startRabbithole(hydration) {
     hideAsk: hideAsk,
     hidePeek: hidePeek,
     closeShare: closeShare,
+    closeSourcesPanel: closeSourcesPanel,
     hideConfirm: hideConfirm
   });
   registerBranchHooks({ post: post });
@@ -90,6 +93,7 @@ export function startRabbithole(hydration) {
   initCanvasView();
   initAskFollowups();
   initPalette();
+  initSourcesPanel();
   initBranchSurfaces();
   initChrome({ post: post, refreshStatus: refreshStatus });
 }

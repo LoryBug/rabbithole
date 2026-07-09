@@ -18,6 +18,7 @@ var paletteHooks = {
   hideAsk: function(){},
   hidePeek: function(){},
   closeShare: function(){},
+  closeSourcesPanel: function(){},
   hideConfirm: function(){}
 };
 
@@ -50,7 +51,7 @@ export function togglePalette(){ if (palOpen) closePalette(); else openPalette()
 export function openPalette(){
     palOpen = true;
     palCanvasCommands = mode === "canvas";
-    paletteHooks.hideAsk(); paletteHooks.hidePeek(); paletteHooks.closeShare(); paletteHooks.hideConfirm();
+    paletteHooks.hideAsk(); paletteHooks.hidePeek(); paletteHooks.closeShare(); paletteHooks.closeSourcesPanel(); paletteHooks.hideConfirm();
     paletteEl.classList.add("visible");
     palText.value = "";
     renderPalette("");

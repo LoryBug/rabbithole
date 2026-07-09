@@ -11,6 +11,7 @@ export const CANVAS_SHELL = `
     <button class="tool-btn" id="r-textdown" title="Smaller text">A−</button>
     <button class="tool-btn" id="r-textup" title="Larger text">A+</button>
     <button class="tool-btn" id="r-canvas" title="Open the spatial canvas">⤢ Canvas</button>
+    <button class="tool-btn" id="r-sources" title="Show sources overview">Sources</button>
     <button class="tool-btn" id="r-share" title="Share, export, synthesize">↗ Share</button>
     <button class="tool-btn" id="r-theme" title="Toggle theme" aria-label="Toggle theme">◑</button>
     <button class="tool-btn" id="r-done" title="End the session (the hole stays saved)">Done</button>
@@ -42,6 +43,7 @@ export const CANVAS_SHELL = `
   <button class="tool-btn tool-icon" id="t-tidy" title="Tidy up layout · T" aria-label="Tidy up layout · T"><svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" aria-hidden="true"><rect x="6.25" y="2.5" width="3.5" height="2.75" rx="0.7"/><rect x="2.75" y="10.75" width="3.5" height="2.75" rx="0.7"/><rect x="9.75" y="10.75" width="3.5" height="2.75" rx="0.7"/><path d="M8 5.25v2.25"/><path d="M4.5 7.5h7"/><path d="M4.5 7.5v3.25"/><path d="M11.5 7.5v3.25"/></svg></button>
   <button class="tool-btn" id="t-synth-prompt" title="Synthesize selected nodes" disabled>◫ Synthesize <span id="t-synth-count">0</span></button>
   <span class="sep"></span>
+  <button class="tool-btn" id="t-sources" title="Show sources overview">Sources</button>
   <button class="tool-btn tool-icon" id="t-share" title="Share, export, synthesize" aria-label="Share, export, synthesize">↗</button>
   <button class="tool-btn tool-icon" id="t-theme" title="Toggle theme" aria-label="Toggle theme">◑</button>
   <span class="sep" id="act-sep" style="display:none"></span>
@@ -83,6 +85,11 @@ export const CANVAS_SHELL = `
 </div></div>
 
 <div id="peek"></div>
+
+<div id="sources-panel" aria-hidden="true">
+  <div class="sources-head"><span>Sources</span><button id="sources-close" title="Close" aria-label="Close">×</button></div>
+  <div class="sources-body" id="sources-body"></div>
+</div>
 
 <div id="sharemenu">
   <button class="sm-item" id="sm-trail"><span class="sm-ic">⤷</span>Copy trail as Markdown</button>
