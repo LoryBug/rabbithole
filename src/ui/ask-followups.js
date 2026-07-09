@@ -1,5 +1,6 @@
 import {
   BRANCH_FOLLOWUP,
+  BRANCH_NOTES,
   BRANCH_SELECTION,
   DEFAULT_CHILD,
   LENSES,
@@ -62,6 +63,8 @@ var askHooks = {
   hidePeek: function(){}
 };
 
+var selectionShowTimer = 0;
+
 export function registerAskHooks(hooks) {
   Object.assign(askHooks, hooks || {});
 }
@@ -79,7 +82,13 @@ export function initAskFollowups(){
     if (inAsk(e)) return;
     hideAsk();
   });
-  document.addEventListener("mouseup", function(e){ if (inAsk(e)) return; setTimeout(maybeShowAsk, 0); });
+  document.addEventListener("mouseup", function(e){ scheduleMaybeShowAsk(e); });
+  document.addEventListener("pointerup", function(e){ scheduleMaybeShowAsk(e); });
+  document.addEventListener("touchend", function(e){ scheduleMaybeShowAsk(e); });
+  document.addEventListener("keyup", function(e){
+    if (e.key === "Shift" || e.key.indexOf("Arrow") === 0) scheduleMaybeShowAsk(e);
+  });
+  document.addEventListener("selectionchange", function(){ scheduleMaybeShowAsk(null, 80); });
   askGo.addEventListener("click", function(e){ submitAsk(null, motionSourceFromEvent(e)); });
   document.getElementById("ask-lenses").addEventListener("click", function(e){
     var b = e.target.closest ? e.target.closest(".lens") : null;
@@ -100,6 +109,12 @@ export function initAskFollowups(){
 }
 
 function inAsk(e){ return e.target && e.target.closest && e.target.closest("#ask"); }
+
+  function scheduleMaybeShowAsk(e, delay){
+    if (e && inAsk(e)) return;
+    if (selectionShowTimer) clearTimeout(selectionShowTimer);
+    selectionShowTimer = setTimeout(function(){ selectionShowTimer = 0; maybeShowAsk(); }, delay || 0);
+  }
 
   function maybeShowAsk(){
     var sel = window.getSelection();
@@ -260,6 +275,30 @@ export function sendFollowup(parent, question, lens, synthesis, opts){
     if (opts.synthesisMode) payload.synthesis_mode = opts.synthesisMode;
     if (opts.synthesisSources) payload.synthesis_sources = opts.synthesisSources;
     askHooks.post(payload).then(function(res){ if (!res || !res.ok) rollbackBranch(node); });
+    refreshAmbient();
+    return node;
+  }
+
+export function sendNotesBranch(parent){
+    var childId = uuid();
+    var pos = placeChild(parent, BRANCH_NOTES);
+    var node = {
+      id: childId, parent_id: parent.id,
+      title: "Notes",
+      html: "", md: "",
+      markdown: "",
+      base_url: parent.base_url || null,
+      base_url_source: parent.base_url ? "inherited" : null,
+      read: false,
+      origin: { selected_text: "", question: "", lens: null, synthesis: false, anchor: null, branch_type: BRANCH_NOTES },
+      x: pos.x, y: pos.y, w: DEFAULT_CHILD.w, h: DEFAULT_CHILD.h, font_scale: 1, collapsed: false,
+      status: "answered", _order: nextOrder(), _startTs: Date.now()
+    };
+    nodes[childId] = node;
+    if (canvasBuilt){ createNodeEl(node, true); renderVisibility(); drawEdges(); }
+    askHooks.post({ type: "notes_create", node_id: childId, parent_id: parent.id,
+      branch_type: BRANCH_NOTES,
+      position: { x: node.x, y: node.y }, size: { w: node.w, h: node.h } });
     refreshAmbient();
     return node;
   }

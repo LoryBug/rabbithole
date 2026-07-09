@@ -1648,6 +1648,7 @@ var RabbitholeFrozenClient = (() => {
   // src/core/model.js
   var BRANCH_SELECTION = "selection";
   var BRANCH_FOLLOWUP = "followup";
+  var BRANCH_NOTES = "notes";
   var LENSES = Object.freeze({
     explain: Object.freeze({
       label: "Explain",
@@ -1680,7 +1681,7 @@ var RabbitholeFrozenClient = (() => {
     var _a2, _b;
     if (!node || !node.origin && !node.parent_id) return null;
     const type = (_a2 = node.origin) == null ? void 0 : _a2.branch_type;
-    if (type === BRANCH_SELECTION || type === BRANCH_FOLLOWUP) return type;
+    if (type === BRANCH_SELECTION || type === BRANCH_FOLLOWUP || type === BRANCH_NOTES) return type;
     return ((_b = node.origin) == null ? void 0 : _b.selected_text) ? BRANCH_SELECTION : BRANCH_FOLLOWUP;
   }
 
@@ -1746,7 +1747,7 @@ var RabbitholeFrozenClient = (() => {
     return bounds;
   }
   function placeChild(parent, branchType, { childrenOf: childrenOf2, effH: effH2 = null, sort = nodeOrder, childSize = DEFAULT_CHILD } = {}) {
-    const type = branchType === BRANCH_SELECTION ? BRANCH_SELECTION : BRANCH_FOLLOWUP;
+    const type = branchType === BRANCH_SELECTION ? BRANCH_SELECTION : branchType === BRANCH_NOTES ? BRANCH_NOTES : BRANCH_FOLLOWUP;
     const parentX = nodeX(parent);
     const parentY = nodeY(parent);
     const parentW = nodeW(parent);
@@ -1977,6 +1978,9 @@ var RabbitholeFrozenClient = (() => {
   }
   function isFollowup(n) {
     return branchTypeOf(n) === BRANCH_FOLLOWUP;
+  }
+  function isNotesBranch(n) {
+    return branchTypeOf(n) === BRANCH_NOTES;
   }
   function followupsOf(id) {
     return childrenOf(id).filter(isFollowup).sort(nodeOrder2);
@@ -2809,2909 +2813,6 @@ var RabbitholeFrozenClient = (() => {
     m.classList.add("mark-focus");
     var top = m.getBoundingClientRect().top - readerMain.getBoundingClientRect().top + readerMain.scrollTop;
     readerHooks.animateScroll(readerMain, Math.max(0, top - readerMain.clientHeight * 0.42), "keyboard");
-  }
-
-  // src/ui/canvas-view.js
-  var canvasHooks = {
-    hideAsk: function() {
-    },
-    hidePeek: function() {
-    },
-    sendFollowup: function() {
-      return null;
-    },
-    confirmDelete: function() {
-    },
-    persistNode: function() {
-    },
-    persistNodesBulk: function() {
-    },
-    scheduleViewSave: function() {
-    },
-    onSelectionChange: function() {
-    }
-  };
-  var selectedNodeIds = {};
-  function registerCanvasHooks(hooks) {
-    Object.assign(canvasHooks, hooks || {});
-  }
-  function selectedCanvasNodes() {
-    var out = [];
-    for (var id in selectedNodeIds) {
-      if (selectedNodeIds[id] && nodes[id] && nodes[id].status !== "pending") out.push(nodes[id]);
-    }
-    out.sort(nodeOrder2);
-    return out;
-  }
-  function clearCanvasSelection() {
-    for (var id in selectedNodeIds) {
-      if (nodes[id] && nodes[id].el) nodes[id].el.classList.remove("selected");
-      if (nodes[id] && nodes[id].selectBtn) {
-        nodes[id].selectBtn.classList.remove("active");
-        nodes[id].selectBtn.textContent = "\u25A1";
-        nodes[id].selectBtn.setAttribute("aria-pressed", "false");
-      }
-    }
-    selectedNodeIds = {};
-    notifySelectionChange();
-  }
-  function notifySelectionChange() {
-    var count = selectedCanvasNodes().length;
-    canvasHooks.onSelectionChange(count);
-    try {
-      document.dispatchEvent(new CustomEvent("rh-selection-change", { detail: { count } }));
-    } catch (_e) {
-    }
-  }
-  function initCanvasView() {
-    registerCoreHooks({
-      ensureCanvasBuilt,
-      diveToNode,
-      effH
-    });
-    world.addEventListener("mouseover", onWorldMouseOver);
-    world.addEventListener("mouseout", onWorldMouseOut);
-    initViewportPan();
-    viewport.addEventListener("wheel", onViewportWheel, { passive: false });
-    viewport.addEventListener("dblclick", onViewportDblClick);
-    document.getElementById("t-reader").addEventListener("click", function() {
-      openNode(currentNodeId);
-    });
-    document.getElementById("t-frame").addEventListener("click", function(e) {
-      frameAll(true, motionSourceFromEvent(e));
-    });
-    document.getElementById("t-tidy").addEventListener("click", function(e) {
-      tidy(motionSourceFromEvent(e));
-    });
-    document.getElementById("t-zin").addEventListener("click", function() {
-      zoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, 1.15);
-    });
-    document.getElementById("t-zout").addEventListener("click", function() {
-      zoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, 0.87);
-    });
-    zoomLabel.addEventListener("click", function() {
-      zoomTo(viewport.clientWidth / 2, viewport.clientHeight / 2, 1);
-    });
-    exposeFilmCameraHook();
-  }
-  function applyTransform() {
-    world.style.transform = "translate(" + view.x + "px," + view.y + "px) scale(" + view.scale + ")";
-    zoomLabel.textContent = Math.round(view.scale * 100) + "%";
-    canvasHooks.scheduleViewSave();
-  }
-  function exposeFilmCameraHook() {
-    var enabled = false;
-    try {
-      enabled = localStorage.getItem("rh-film") === "1";
-    } catch (e) {
-    }
-    if (!enabled) return;
-    Object.defineProperty(window, "__rhFilmCamera", {
-      configurable: true,
-      value: {
-        getView: function() {
-          return { x: view.x, y: view.y, scale: view.scale };
-        },
-        setView: function(x, y, scale) {
-          viewAnimId++;
-          view.x = Number(x);
-          view.y = Number(y);
-          view.scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Number(scale)));
-          applyTransform();
-          drawEdges();
-          return { x: view.x, y: view.y, scale: view.scale };
-        }
-      }
-    });
-  }
-  function screenToWorld(sx, sy) {
-    return { x: (sx - view.x) / view.scale, y: (sy - view.y) / view.scale };
-  }
-  function zoomAt(sx, sy, factor) {
-    var next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, view.scale * factor));
-    zoomTo(sx, sy, next);
-  }
-  function zoomTo(sx, sy, next) {
-    viewAnimId++;
-    next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, next));
-    if (next === view.scale) return;
-    var w = screenToWorld(sx, sy);
-    view.scale = next;
-    view.x = sx - w.x * view.scale;
-    view.y = sy - w.y * view.scale;
-    applyTransform();
-  }
-  var NODE_EXPAND_ICON = '<svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M9.25 3.75h3v3"/><path d="M12.25 3.75 8.75 7.25"/><path d="M6.75 12.25h-3v-3"/><path d="M3.75 12.25l3.5-3.5"/></svg>';
-  var NODE_COLLAPSE_ICON = '<svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M3 8h10"/></svg>';
-  var NODE_COPY_ICON = '<svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none" aria-hidden="true"><rect x="5" y="4" width="7" height="9" rx="1.2"/><path d="M4 11.5H3.7c-.7 0-1.2-.5-1.2-1.2V3.7c0-.7.5-1.2 1.2-1.2h5.6c.7 0 1.2.5 1.2 1.2V4"/></svg>';
-  function createNodeEl(node, enter) {
-    var el = document.createElement("div");
-    el.className = "node" + (node.id === rootId ? " root" : "");
-    if (enter && !document.hidden && !shouldReduceMotion()) el.className += " node-enter";
-    el.dataset.id = node.id;
-    var head = document.createElement("div");
-    head.className = "node-head";
-    if (node.id === rootId) {
-      var badge = document.createElement("span");
-      badge.className = "node-badge";
-      badge.textContent = "\u{1F407}";
-      badge.title = "Where this Rabbithole begins";
-      head.appendChild(badge);
-    }
-    var selectBtn = mkBtn("\u25A1", "Select for synthesis");
-    selectBtn.classList.add("node-select");
-    selectBtn.setAttribute("aria-pressed", "false");
-    var titleEl = document.createElement("span");
-    titleEl.className = "node-title";
-    titleEl.textContent = node.title || "\u2026";
-    titleEl.title = node.title || "";
-    var aDown = mkBtn("A\u2212", "Smaller text");
-    var aUp = mkBtn("A+", "Larger text");
-    aDown.classList.add("node-font-btn");
-    aUp.classList.add("node-font-btn");
-    var copyBtn = mkIconBtn(NODE_COPY_ICON, "Copy Markdown");
-    copyBtn.classList.add("node-copy-btn");
-    var collapseBtn = mkIconBtn(NODE_COLLAPSE_ICON, "Collapse");
-    var openBtn = mkIconBtn(NODE_EXPAND_ICON, "Expand");
-    var divider = document.createElement("span");
-    divider.className = "node-act-divider";
-    divider.setAttribute("aria-hidden", "true");
-    var acts = document.createElement("span");
-    acts.className = "node-acts";
-    if (node.id !== rootId) {
-      var delBtn = mkBtn("\u2715", "Remove this branch");
-      delBtn.classList.add("danger");
-      delBtn.addEventListener("click", function(e) {
-        e.stopPropagation();
-        canvasHooks.confirmDelete(node, delBtn);
-      });
-      acts.appendChild(delBtn);
-    }
-    acts.appendChild(aDown);
-    acts.appendChild(aUp);
-    acts.appendChild(divider);
-    acts.appendChild(collapseBtn);
-    acts.appendChild(copyBtn);
-    acts.appendChild(openBtn);
-    head.appendChild(selectBtn);
-    head.appendChild(titleEl);
-    head.appendChild(acts);
-    var body2 = document.createElement("div");
-    body2.className = "node-body";
-    var comp = buildCardComposer(node);
-    var resize = document.createElement("div");
-    resize.className = "node-resize";
-    el.appendChild(head);
-    el.appendChild(body2);
-    el.appendChild(comp);
-    el.appendChild(resize);
-    world.appendChild(el);
-    node.el = el;
-    node.bodyEl = body2;
-    node.titleEl = titleEl;
-    node.selectBtn = selectBtn;
-    fillBody(node);
-    updateCardComposer(node);
-    if (node.collapsed) el.classList.add("collapsed");
-    if (isUnread(node)) el.classList.add("unread");
-    enableDrag(node, head);
-    enableResize(node, resize);
-    head.addEventListener("dblclick", function() {
-      openNode(node.id);
-    });
-    selectBtn.addEventListener("click", function(e) {
-      e.stopPropagation();
-      toggleNodeSelected(node);
-    });
-    copyBtn.addEventListener("click", function(e) {
-      e.stopPropagation();
-      copyNodeMarkdown(node);
-    });
-    openBtn.addEventListener("click", function(e) {
-      e.stopPropagation();
-      openNode(node.id);
-    });
-    collapseBtn.addEventListener("click", function(e) {
-      e.stopPropagation();
-      toggleCollapse(node, collapseBtn);
-    });
-    aDown.addEventListener("click", function(e) {
-      e.stopPropagation();
-      setNodeFontScale(node, -0.1);
-    });
-    aUp.addEventListener("click", function(e) {
-      e.stopPropagation();
-      setNodeFontScale(node, 0.1);
-    });
-    body2.addEventListener("scroll", scheduleEdges, { passive: true });
-    body2.addEventListener("pointerdown", function() {
-      if (node.status === "answered") markRead(node);
-    });
-    el.addEventListener("mouseenter", function() {
-      focusOrigin(node, true);
-    });
-    el.addEventListener("mouseleave", function() {
-      focusOrigin(node, false);
-      if (node.ncComp && !node.ncText.value.trim() && document.activeElement !== node.ncText) closeCardDrawer(node);
-    });
-    layoutNode(node);
-    if (el.classList.contains("node-enter")) {
-      requestAnimationFrame(function() {
-        el.classList.add("entered");
-        setTimeout(function() {
-          el.classList.remove("node-enter");
-          el.classList.remove("entered");
-        }, 220);
-      });
-    }
-    return node;
-  }
-  function toggleNodeSelected(node) {
-    if (!node || node.status === "pending") return;
-    var on = !selectedNodeIds[node.id];
-    if (on) selectedNodeIds[node.id] = true;
-    else delete selectedNodeIds[node.id];
-    if (node.el) node.el.classList.toggle("selected", on);
-    if (node.selectBtn) {
-      node.selectBtn.classList.toggle("active", on);
-      node.selectBtn.textContent = on ? "\u2713" : "\u25A1";
-      node.selectBtn.setAttribute("aria-pressed", on ? "true" : "false");
-    }
-    flashHint(on ? "Selected for synthesis" : "Removed from synthesis selection");
-    notifySelectionChange();
-  }
-  function diveToNode(node, source2) {
-    var vw = viewport.clientWidth, vh = viewport.clientHeight;
-    var ts = Math.min(1, Math.max(0.75, Math.min((vw - 120) / node.w, (vh - 120) / effH(node))));
-    var tx = vw / 2 - (node.x + node.w / 2) * ts;
-    var ty = vh / 2 - (node.y + effH(node) / 2) * ts;
-    animateView(tx, ty, ts, { source: source2, duration: 270, ease: "inOut" });
-  }
-  function mkBtn(txt, title) {
-    var b = document.createElement("button");
-    b.className = "node-btn";
-    b.textContent = txt;
-    b.title = title;
-    return b;
-  }
-  function mkIconBtn(svg, title) {
-    var b = mkBtn("", title);
-    b.innerHTML = svg;
-    b.setAttribute("aria-label", title);
-    return b;
-  }
-  function copyNodeMarkdown(node) {
-    var title = node.title || "Untitled";
-    var body2 = (node.md || "").trim();
-    var text2 = "# " + title + (body2 ? "\n\n" + body2 : "");
-    function done() {
-      flashHint("Copied \u201C" + title.slice(0, 40) + (title.length > 40 ? "\u2026" : "") + "\u201D as Markdown");
-    }
-    function legacy() {
-      var ta = document.createElement("textarea");
-      ta.value = text2;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      try {
-        document.execCommand("copy");
-      } catch (_err) {
-      }
-      document.body.removeChild(ta);
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text2).then(done, function() {
-        legacy();
-        done();
-      });
-    } else {
-      legacy();
-      done();
-    }
-  }
-  var SEND_ICON = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 12.8V3.6M8 3.6 3.9 7.7M8 3.6l4.1 4.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
-  function autoGrowEl(ta, max) {
-    ta.style.height = "auto";
-    ta.style.height = Math.min(max, ta.scrollHeight) + "px";
-    ta.style.overflowY = ta.scrollHeight > max ? "auto" : "hidden";
-  }
-  function buildCardComposer(node) {
-    var comp = document.createElement("div");
-    comp.className = "node-composer";
-    var clip = document.createElement("div");
-    clip.className = "nc-clip";
-    var inner2 = document.createElement("div");
-    inner2.className = "nc-inner";
-    var ta = document.createElement("textarea");
-    ta.rows = 1;
-    var send = document.createElement("button");
-    send.className = "send-btn";
-    send.title = "Send (\u21B5)";
-    send.setAttribute("aria-label", "Send follow-up");
-    send.innerHTML = SEND_ICON;
-    var handle = document.createElement("button");
-    handle.type = "button";
-    handle.className = "nc-handle";
-    handle.title = "Ask a follow-up about this document";
-    var plus = document.createElement("span");
-    plus.className = "nc-plus";
-    plus.textContent = "+";
-    handle.appendChild(plus);
-    handle.appendChild(document.createTextNode(" Follow-up"));
-    inner2.appendChild(ta);
-    inner2.appendChild(send);
-    clip.appendChild(inner2);
-    comp.appendChild(clip);
-    comp.appendChild(handle);
-    node.ncComp = comp;
-    node.ncInner = inner2;
-    node.ncText = ta;
-    node.ncSend = send;
-    handle.addEventListener("click", function(e) {
-      e.stopPropagation();
-      openCardDrawer(node);
-    });
-    ta.addEventListener("input", function() {
-      autoGrowEl(ta, 90);
-      updateCardComposer(node);
-    });
-    ta.addEventListener("keydown", function(e) {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        submitCardFollowup(node, "keyboard");
-      } else if (e.key === "Escape") {
-        e.stopPropagation();
-        closeCardDrawer(node);
-        ta.blur();
-      }
-    });
-    ta.addEventListener("blur", function() {
-      if (!ta.value.trim() && !(node.el && node.el.matches(":hover"))) closeCardDrawer(node);
-    });
-    send.addEventListener("click", function(e) {
-      e.stopPropagation();
-      submitCardFollowup(node, motionSourceFromEvent(e));
-    });
-    return comp;
-  }
-  function openCardDrawer(node) {
-    node.ncComp.classList.add("open");
-    node.ncText.focus({ preventScroll: true });
-  }
-  function closeCardDrawer(node) {
-    node.ncComp.classList.remove("open");
-  }
-  function updateCardComposer(node) {
-    if (!node.ncText) return;
-    var down = closed || node.status === "pending";
-    node.ncText.disabled = down;
-    node.ncInner.classList.toggle("disabled", down);
-    node.ncComp.classList.toggle("nc-draft", !!node.ncText.value.trim());
-    if (frozen) node.ncText.placeholder = "Read-only snapshot";
-    else if (closed) node.ncText.placeholder = "Session ended \u2014 saved";
-    else if (node.status === "pending") node.ncText.placeholder = "Still being written\u2026";
-    else if (connLost || !agentAttached) node.ncText.placeholder = "Asks are saved for the agent\u2026";
-    else node.ncText.placeholder = "Ask a follow-up\u2026";
-    node.ncSend.disabled = down || !node.ncText.value.trim();
-  }
-  function submitCardFollowup(node, source2) {
-    if (closed) {
-      flashHint("Session ended \u2014 reopen this Rabbithole from your terminal to continue.");
-      return;
-    }
-    if (node.status === "pending") return;
-    var question = node.ncText.value.trim();
-    if (!question) return;
-    var kid = canvasHooks.sendFollowup(node, question, null);
-    node.ncText.value = "";
-    autoGrowEl(node.ncText, 90);
-    closeCardDrawer(node);
-    updateCardComposer(node);
-    revealNode(kid, source2);
-  }
-  function revealNode(n, source2) {
-    if (mode !== "canvas" || !n) return;
-    var pad2 = 30, vw = viewport.clientWidth, vh = viewport.clientHeight;
-    var x1 = n.x * view.scale + view.x, y1 = n.y * view.scale + view.y;
-    var x2 = (n.x + n.w) * view.scale + view.x, y2 = (n.y + n.h) * view.scale + view.y;
-    var dx = 0, dy = 0;
-    if (x2 > vw - pad2) dx = vw - pad2 - x2;
-    if (x1 + dx < pad2) dx = pad2 - x1;
-    if (y2 > vh - pad2) dy = vh - pad2 - y2;
-    if (y1 + dy < pad2) dy = pad2 - y1;
-    if (!dx && !dy) return;
-    animatePan(view.x + dx, view.y + dy, source2, 230, "out");
-  }
-  function animatePan(tx, ty, source2, duration, ease) {
-    animateView(tx, ty, view.scale, { source: source2, duration, ease });
-  }
-  var viewAnimId = 0;
-  function animateView(tx, ty, ts, opts) {
-    opts = opts || {};
-    var myId = ++viewAnimId;
-    if (document.hidden || shouldReduceMotion() || opts.source !== "pointer") {
-      view.x = tx;
-      view.y = ty;
-      view.scale = ts;
-      applyTransform();
-      return;
-    }
-    var sx = view.x, sy = view.y, ss = view.scale, t0 = performance.now(), D2 = opts.duration || 270;
-    var easeFn = opts.ease === "inOut" ? easeInOutMotion : easeOutMotion;
-    function step(t) {
-      if (myId !== viewAnimId) return;
-      var p = Math.min(1, (t - t0) / D2), k = easeFn(p);
-      view.x = sx + (tx - sx) * k;
-      view.y = sy + (ty - sy) * k;
-      view.scale = ss + (ts - ss) * k;
-      applyTransform();
-      if (p < 1) requestAnimationFrame(step);
-    }
-    requestAnimationFrame(step);
-  }
-  function fillBody(node) {
-    var body2 = node.bodyEl;
-    if (!body2) return;
-    body2.innerHTML = "";
-    if (node.origin && node.origin.synthesis) {
-      var sq = document.createElement("div");
-      sq.className = "origin-quote";
-      sq.textContent = node.origin.synthesis_mode === "question_map" ? "\u2726 Question Map from selected nodes" : "\u2726 Synthesis from selected nodes";
-      body2.appendChild(sq);
-    } else if (node.origin && node.origin.selected_text) {
-      var q = document.createElement("div");
-      q.className = "origin-quote";
-      q.textContent = "\u201C" + node.origin.selected_text + "\u201D";
-      body2.appendChild(q);
-    } else if (node.origin && (node.origin.question || node.origin.lens)) {
-      var fq = document.createElement("div");
-      fq.className = "origin-quote";
-      fq.textContent = node.origin.lens ? "Follow-up \u2014 " + lensLabel2(node.origin.lens) : node.origin.question;
-      body2.appendChild(fq);
-    }
-    var dc = buildDocContent(node, CANVAS_BASE);
-    body2.appendChild(dc);
-    applyChildHighlights(dc, node);
-  }
-  function setNodeFontScale(node, delta) {
-    node.font_scale = Math.min(MAX_FS, Math.max(MIN_FS, (node.font_scale || 1) + delta));
-    var dc = node.bodyEl && node.bodyEl.querySelector(".doc-content");
-    if (dc) dc.style.fontSize = fontPx(node, CANVAS_BASE) + "px";
-    if (mode === "reader" && currentNodeId === node.id) {
-      var rdc = readerMain.querySelector(".doc-content");
-      if (rdc) rdc.style.fontSize = fontPx(node, READER_BASE) + "px";
-    }
-    scheduleEdges();
-    canvasHooks.persistNode(node);
-  }
-  function layoutNode(node) {
-    var el = node.el;
-    el.style.left = node.x + "px";
-    el.style.top = node.y + "px";
-    el.style.width = node.w + "px";
-    if (!node.collapsed) el.style.height = node.h + "px";
-  }
-  function onPointerGesture(handle, onDown, onMove, onUp) {
-    handle.addEventListener("pointerdown", function(e) {
-      if (!onDown(e)) return;
-      try {
-        handle.setPointerCapture(e.pointerId);
-      } catch (_e) {
-      }
-      function move(ev) {
-        onMove(ev);
-      }
-      function done() {
-        handle.removeEventListener("pointermove", move);
-        handle.removeEventListener("pointerup", done);
-        handle.removeEventListener("pointercancel", done);
-        handle.removeEventListener("lostpointercapture", done);
-        try {
-          handle.releasePointerCapture(e.pointerId);
-        } catch (_e) {
-        }
-        onUp();
-      }
-      handle.addEventListener("pointermove", move);
-      handle.addEventListener("pointerup", done);
-      handle.addEventListener("pointercancel", done);
-      handle.addEventListener("lostpointercapture", done);
-    });
-  }
-  function enableDrag(node, handle) {
-    var sx, sy, ox, oy;
-    onPointerGesture(
-      handle,
-      function(e) {
-        if (e.button !== 0 || e.target.closest(".node-btn")) return false;
-        e.preventDefault();
-        canvasHooks.hideAsk();
-        sx = e.clientX;
-        sy = e.clientY;
-        ox = node.x;
-        oy = node.y;
-        return true;
-      },
-      function(ev) {
-        node.x = ox + (ev.clientX - sx) / view.scale;
-        node.y = oy + (ev.clientY - sy) / view.scale;
-        layoutNode(node);
-        scheduleEdges();
-      },
-      function() {
-        drawEdges();
-        canvasHooks.persistNode(node);
-      }
-    );
-  }
-  function enableResize(node, handle) {
-    var sx, sy, ow, oh;
-    onPointerGesture(
-      handle,
-      function(e) {
-        if (e.button !== 0) return false;
-        e.preventDefault();
-        e.stopPropagation();
-        sx = e.clientX;
-        sy = e.clientY;
-        ow = node.w;
-        oh = node.h;
-        return true;
-      },
-      function(ev) {
-        node.w = Math.max(240, ow + (ev.clientX - sx) / view.scale);
-        node.h = Math.max(160, oh + (ev.clientY - sy) / view.scale);
-        layoutNode(node);
-        scheduleEdges();
-      },
-      function() {
-        drawEdges();
-        canvasHooks.persistNode(node);
-      }
-    );
-  }
-  function toggleCollapse(node, btn) {
-    node.collapsed = !node.collapsed;
-    node.el.classList.toggle("collapsed", node.collapsed);
-    btn.innerHTML = NODE_COLLAPSE_ICON;
-    if (!node.collapsed) layoutNode(node);
-    renderVisibility();
-    drawEdges();
-    canvasHooks.persistNode(node);
-  }
-  function renderVisibility() {
-    for (var id in nodes) {
-      var n = nodes[id];
-      if (!n.el) continue;
-      if (n.id === rootId) {
-        n.el.style.display = "";
-        continue;
-      }
-      n.el.style.display = isVisible(n) ? "" : "none";
-    }
-  }
-  var edgeRaf = 0;
-  function scheduleEdges() {
-    if (edgeRaf) return;
-    edgeRaf = requestAnimationFrame(function() {
-      edgeRaf = 0;
-      drawEdges();
-    });
-  }
-  function effH(n) {
-    return n.collapsed && n.el ? n.el.offsetHeight || 36 : n.h;
-  }
-  function clamp(lo, hi, v) {
-    return Math.max(lo, Math.min(hi, v));
-  }
-  function edgeSides(p, n) {
-    var ph = effH(p), nh = effH(n);
-    var dx = n.x + n.w / 2 - (p.x + p.w / 2);
-    var dy = n.y + nh / 2 - (p.y + ph / 2);
-    var fx = dx / ((p.w + n.w) / 2 + 1);
-    var fy = dy / ((ph + nh) / 2 + 1);
-    if (Math.abs(fx) >= Math.abs(fy)) return dx >= 0 ? ["right", "left"] : ["left", "right"];
-    return dy >= 0 ? ["bottom", "top"] : ["top", "bottom"];
-  }
-  function edgeStart(p, child, side) {
-    var ph = effH(p), ax = null, ay = null, anchored = false;
-    if (!p.collapsed && p.el && p.bodyEl) {
-      var mark = p.bodyEl.querySelector('mark[data-child="' + child.id + '"]');
-      if (mark) {
-        var mr = mark.getBoundingClientRect();
-        if (mr.height > 0) {
-          var er = p.el.getBoundingClientRect();
-          var br2 = p.bodyEl.getBoundingClientRect();
-          ay = p.y + clamp(
-            (br2.top - er.top) / view.scale + 10,
-            (br2.bottom - er.top) / view.scale - 10,
-            (mr.top + mr.height / 2 - er.top) / view.scale
-          );
-          ax = p.x + clamp(
-            (br2.left - er.left) / view.scale + 10,
-            (br2.right - er.left) / view.scale - 10,
-            (mr.left + mr.width / 2 - er.left) / view.scale
-          );
-          anchored = true;
-        }
-      } else if (isFollowup(child)) {
-        ay = p.y + ph - 22;
-      }
-    }
-    if (side === "right") return { x: p.x + p.w, y: ay != null ? ay : p.y + ph / 2, anchored };
-    if (side === "left") return { x: p.x, y: ay != null ? ay : p.y + ph / 2, anchored };
-    if (side === "bottom") return { x: ax != null ? ax : p.x + p.w / 2, y: p.y + ph, anchored };
-    return { x: ax != null ? ax : p.x + p.w / 2, y: p.y, anchored };
-  }
-  function edgeEnd(n, side) {
-    var nh = effH(n);
-    if (side === "left") return { x: n.x, y: n.y + nh / 2 };
-    if (side === "right") return { x: n.x + n.w, y: n.y + nh / 2 };
-    if (side === "top") return { x: n.x + n.w / 2, y: n.y };
-    return { x: n.x + n.w / 2, y: n.y + nh };
-  }
-  function ctrlPt(pt, side, d) {
-    if (side === "right") return pt.x + d + " " + pt.y;
-    if (side === "left") return pt.x - d + " " + pt.y;
-    if (side === "bottom") return pt.x + " " + (pt.y + d);
-    return pt.x + " " + (pt.y - d);
-  }
-  var edgeEls = {};
-  var edgeGeometry = {};
-  function ensureEdgeEls(edgeId, childId, className) {
-    var els = edgeEls[edgeId];
-    if (els) return els;
-    var path2 = document.createElementNS(SVGNS, "path");
-    path2.setAttribute("data-child", childId);
-    if (className) path2.classList.add(className);
-    var dot = document.createElementNS(SVGNS, "circle");
-    dot.setAttribute("r", "3");
-    dot.setAttribute("data-child", childId);
-    if (className) dot.classList.add(className);
-    edgesSvg.appendChild(path2);
-    edgesSvg.appendChild(dot);
-    edgeEls[edgeId] = [path2, dot];
-    return edgeEls[edgeId];
-  }
-  function removeEdge(edgeId) {
-    var els = edgeEls[edgeId];
-    if (els) {
-      for (var i2 = 0; i2 < els.length; i2++) if (els[i2].parentNode) els[i2].parentNode.removeChild(els[i2]);
-    }
-    delete edgeEls[edgeId];
-    delete edgeGeometry[edgeId];
-    delete edgeHl[edgeId];
-  }
-  function applyEdgeClasses(childId, path2, dot, anchored) {
-    path2.classList.toggle("edge-hl", !!edgeHl[childId]);
-    dot.classList.toggle("edge-hl", !!edgeHl[childId]);
-    dot.classList.toggle("anchored", !!anchored);
-  }
-  function rebuildEdges() {
-    while (edgesSvg.firstChild) edgesSvg.removeChild(edgesSvg.firstChild);
-    edgeEls = {};
-    edgeGeometry = {};
-    drawEdges();
-  }
-  function drawEdges() {
-    var live = {};
-    var visCache = {};
-    function vis(node) {
-      var k = node.id;
-      if (k in visCache) return visCache[k];
-      return visCache[k] = isVisible(node);
-    }
-    for (var id in nodes) {
-      var n = nodes[id];
-      if (!n.el || !vis(n)) continue;
-      var sources = n.origin && n.origin.synthesis_sources || [];
-      var hidePrimaryEdge = sources.length > 0;
-      if (n.parent_id && !hidePrimaryEdge) {
-        var p = nodes[n.parent_id];
-        if (p && p.el && vis(p)) {
-          live[n.id] = true;
-          var sides = edgeSides(p, n);
-          var start = edgeStart(p, n, sides[0]);
-          var end = edgeEnd(n, sides[1]);
-          var horiz = sides[0] === "left" || sides[0] === "right";
-          var reach = Math.max(40, (horiz ? Math.abs(end.x - start.x) : Math.abs(end.y - start.y)) / 2);
-          var d = "M " + start.x + " " + start.y + " C " + ctrlPt(start, sides[0], reach) + " " + ctrlPt(end, sides[1], reach) + " " + end.x + " " + end.y;
-          var geom = {
-            d,
-            cx: String(start.x),
-            cy: String(start.y),
-            anchored: !!start.anchored
-          };
-          var els = ensureEdgeEls(n.id, n.id, "");
-          var path2 = els[0], dot = els[1], prev = edgeGeometry[n.id];
-          if (!prev || prev.d !== geom.d) path2.setAttribute("d", geom.d);
-          if (!prev || prev.cx !== geom.cx) dot.setAttribute("cx", geom.cx);
-          if (!prev || prev.cy !== geom.cy) dot.setAttribute("cy", geom.cy);
-          if (!prev || prev.anchored !== geom.anchored) applyEdgeClasses(n.id, path2, dot, geom.anchored);
-          else if (!!edgeHl[n.id] !== path2.classList.contains("edge-hl")) applyEdgeClasses(n.id, path2, dot, geom.anchored);
-          edgeGeometry[n.id] = geom;
-        }
-      }
-      for (var si = 0; si < sources.length; si++) {
-        var sourceId = sources[si];
-        var sp = nodes[sourceId];
-        if (!sp || !sp.el || !vis(sp)) continue;
-        var edgeId = sourceId + "->" + n.id;
-        live[edgeId] = true;
-        var ssides = edgeSides(sp, n);
-        var sstart = edgeStart(sp, n, ssides[0]);
-        var send = edgeEnd(n, ssides[1]);
-        var shoriz = ssides[0] === "left" || ssides[0] === "right";
-        var sreach = Math.max(40, (shoriz ? Math.abs(send.x - sstart.x) : Math.abs(send.y - sstart.y)) / 2);
-        var sd = "M " + sstart.x + " " + sstart.y + " C " + ctrlPt(sstart, ssides[0], sreach) + " " + ctrlPt(send, ssides[1], sreach) + " " + send.x + " " + send.y;
-        var sgeom = { d: sd, cx: String(sstart.x), cy: String(sstart.y), anchored: false };
-        var sels = ensureEdgeEls(edgeId, n.id, "source-edge");
-        var spath = sels[0], sdot = sels[1], sprev = edgeGeometry[edgeId];
-        if (!sprev || sprev.d !== sgeom.d) spath.setAttribute("d", sgeom.d);
-        if (!sprev || sprev.cx !== sgeom.cx) sdot.setAttribute("cx", sgeom.cx);
-        if (!sprev || sprev.cy !== sgeom.cy) sdot.setAttribute("cy", sgeom.cy);
-        edgeGeometry[edgeId] = sgeom;
-      }
-    }
-    for (var edgeId in edgeEls) {
-      if (!live[edgeId]) removeEdge(edgeId);
-    }
-  }
-  var edgeHl = {};
-  function setEdgeHighlight(childId, on) {
-    if (on) edgeHl[childId] = true;
-    else delete edgeHl[childId];
-    var els = edgeEls[childId];
-    if (!els) return;
-    for (var i2 = 0; i2 < els.length; i2++) els[i2].classList.toggle("edge-hl", on);
-  }
-  function clearEdgeHighlight(childId) {
-    delete edgeHl[childId];
-  }
-  function focusOrigin(node, on) {
-    if (mode !== "canvas") return;
-    setEdgeHighlight(node.id, on);
-    var p = node.parent_id ? nodes[node.parent_id] : null;
-    if (p && p.bodyEl) {
-      var marks = p.bodyEl.querySelectorAll('mark[data-child="' + node.id + '"]');
-      for (var i2 = 0; i2 < marks.length; i2++) marks[i2].classList.toggle("mark-focus", on);
-    }
-  }
-  function onWorldMouseOver(e) {
-    var m = e.target.closest && e.target.closest("mark[data-child]");
-    if (m) setEdgeHighlight(m.dataset.child, true);
-  }
-  function onWorldMouseOut(e) {
-    var m = e.target.closest && e.target.closest("mark[data-child]");
-    if (m) setEdgeHighlight(m.dataset.child, false);
-  }
-  function initViewportPan() {
-    var sx, sy, ox, oy;
-    onPointerGesture(
-      viewport,
-      function(e) {
-        if (e.button !== 0 || e.target.closest(".node")) return false;
-        canvasHooks.hideAsk();
-        viewAnimId++;
-        viewport.classList.add("panning");
-        sx = e.clientX;
-        sy = e.clientY;
-        ox = view.x;
-        oy = view.y;
-        return true;
-      },
-      function(ev) {
-        view.x = ox + (ev.clientX - sx);
-        view.y = oy + (ev.clientY - sy);
-        applyTransform();
-      },
-      function() {
-        viewport.classList.remove("panning");
-      }
-    );
-  }
-  function canScroll(el, dx, dy) {
-    if (dx && el.scrollWidth > el.clientWidth + 1) {
-      if (dx < 0 ? el.scrollLeft > 0 : el.scrollLeft + el.clientWidth < el.scrollWidth - 1) return true;
-    }
-    if (dy && el.scrollHeight > el.clientHeight + 1) {
-      if (dy < 0 ? el.scrollTop > 0 : el.scrollTop + el.clientHeight < el.scrollHeight - 1) return true;
-    }
-    return false;
-  }
-  var wheelKind = null;
-  var wheelCard = null;
-  var wheelTs = 0;
-  function onViewportWheel(e) {
-    if (e.ctrlKey) {
-      e.preventDefault();
-      wheelKind = null;
-      zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.01));
-      return;
-    }
-    if (!wheelKind || e.timeStamp - wheelTs > 180) {
-      wheelCard = e.target.closest && e.target.closest(".node") || null;
-      wheelKind = wheelCard ? "card" : "pan";
-    }
-    wheelTs = e.timeStamp;
-    if (wheelKind === "pan") {
-      e.preventDefault();
-      viewAnimId++;
-      view.x -= e.deltaX;
-      view.y -= e.deltaY;
-      applyTransform();
-      return;
-    }
-    var over = e.target.closest && e.target.closest(".node") || null;
-    if (over !== wheelCard) {
-      e.preventDefault();
-      var nb = wheelCard ? wheelCard.querySelector(".node-body") : null;
-      if (nb) {
-        nb.scrollLeft += e.deltaX;
-        nb.scrollTop += e.deltaY;
-      }
-      return;
-    }
-    var el = e.target, consumable = false;
-    while (el && el.nodeType === 1) {
-      if (canScroll(el, e.deltaX, e.deltaY)) {
-        consumable = true;
-        break;
-      }
-      if (el === over) break;
-      el = el.parentNode;
-    }
-    if (!consumable) e.preventDefault();
-  }
-  function frameAll(animate, source2) {
-    var ids = Object.keys(nodes).filter(function(id) {
-      return isVisible(nodes[id]);
-    });
-    if (!ids.length) return;
-    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    ids.forEach(function(id) {
-      var n = nodes[id];
-      minX = Math.min(minX, n.x);
-      minY = Math.min(minY, n.y);
-      maxX = Math.max(maxX, n.x + n.w);
-      maxY = Math.max(maxY, n.y + (n.collapsed ? 40 : n.h));
-    });
-    var vw = viewport.clientWidth || window.innerWidth, vh = viewport.clientHeight || window.innerHeight, pad2 = 100;
-    var ts = Math.max(MIN_SCALE, Math.min(MAX_SCALE, Math.min((vw - pad2) / (maxX - minX), (vh - pad2) / (maxY - minY), 1.2)));
-    var tx = vw / 2 - (minX + (maxX - minX) / 2) * ts, ty = vh / 2 - (minY + (maxY - minY) / 2) * ts;
-    if (animate) {
-      animateView(tx, ty, ts, { source: source2, duration: 270, ease: "inOut" });
-      return;
-    }
-    view.scale = ts;
-    view.x = tx;
-    view.y = ty;
-    applyTransform();
-  }
-  function onViewportDblClick(e) {
-    if (e.target.closest && e.target.closest(".node")) return;
-    frameAll(true, motionSourceFromEvent(e));
-  }
-  function tidy(source2) {
-    var visited = {};
-    function moveSubtree(node, dx, dy) {
-      node.x += dx;
-      node.y += dy;
-      childrenOf(node.id).filter(function(k) {
-        return visited[k.id];
-      }).sort(nodeOrder2).forEach(function(k) {
-        moveSubtree(k, dx, dy);
-      });
-    }
-    function place(node, x, y) {
-      visited[node.id] = true;
-      node.x = x;
-      node.y = y;
-      var bounds = nodeBounds2(node);
-      if (node.collapsed) return bounds;
-      var kids = childrenOf(node.id).sort(nodeOrder2);
-      var selectionKids = kids.filter(isSelectionBranch);
-      var followupKids = kids.filter(isFollowup);
-      var sideBounds = null;
-      var sideX = node.x + node.w + TREE_PARENT_GAP;
-      var sideY = node.y;
-      selectionKids.forEach(function(k) {
-        var kb = place(k, sideX, sideY);
-        sideBounds = unionBounds2(sideBounds, kb);
-        bounds = unionBounds2(bounds, kb);
-        sideY = kb.maxY + TREE_STACK_GAP;
-      });
-      var belowY = node.y + effH(node) + TREE_PARENT_GAP;
-      followupKids.forEach(function(k) {
-        var kb = place(k, node.x, belowY);
-        if (boundsOverlap2(kb, sideBounds)) {
-          var dy = sideBounds.maxY + TREE_STACK_GAP - kb.minY;
-          moveSubtree(k, 0, dy);
-          kb = shiftBounds2(kb, 0, dy);
-        }
-        bounds = unionBounds2(bounds, kb);
-        belowY = kb.maxY + TREE_STACK_GAP;
-      });
-      return bounds;
-    }
-    var root = nodes[rootId];
-    if (!root) return;
-    place(root, 0, 0);
-    var ids = Object.keys(visited);
-    var moved = [];
-    ids.forEach(function(id) {
-      var nn = nodes[id];
-      layoutNode(nn);
-      moved.push(nn);
-    });
-    canvasHooks.persistNodesBulk(moved);
-    rebuildEdges();
-    frameAll(true, source2);
-  }
-  function ensureCanvasBuilt() {
-    if (canvasBuilt) return;
-    setCanvasBuilt(true);
-    Object.keys(nodes).forEach(function(id) {
-      if (!nodes[id].el) createNodeEl(nodes[id]);
-    });
-    renderVisibility();
-    applyTransform();
-  }
-  function setMode(m) {
-    if (m === "canvas" && mode === "reader") {
-      var cur = nodes[currentNodeId];
-      if (cur) cur._scrollTop = readerMain.scrollTop;
-    }
-    setModeValue(m);
-    if (m === "canvas") {
-      ensureCanvasBuilt();
-      canvasHooks.hidePeek();
-      document.body.classList.add("mode-canvas");
-      requestAnimationFrame(function() {
-        rebuildEdges();
-        if (!canvasFramed) {
-          setCanvasFramed(true);
-          frameAll();
-        }
-      });
-      canvasHooks.scheduleViewSave();
-    } else {
-      openNode(currentNodeId);
-    }
-  }
-
-  // src/ui/ask-followups.js
-  var askHooks = {
-    post: function() {
-      return Promise.resolve({ ok: true });
-    },
-    closeShare: function() {
-    },
-    closeSourcesPanel: function() {
-    },
-    hideConfirm: function() {
-    },
-    hidePeek: function() {
-    }
-  };
-  function registerAskHooks(hooks) {
-    Object.assign(askHooks, hooks || {});
-  }
-  function initAskFollowups() {
-    document.addEventListener("mousedown", function(e) {
-      var c2 = e.target && e.target.closest ? function(sel) {
-        return e.target.closest(sel);
-      } : function() {
-        return null;
-      };
-      if (!c2("#sharemenu") && !c2("#r-share") && !c2("#t-share")) askHooks.closeShare();
-      if (!c2("#sources-panel") && !c2("#r-sources") && !c2("#t-sources")) askHooks.closeSourcesPanel();
-      if (!c2("#confirm")) askHooks.hideConfirm();
-      if (!c2("#peek") && !c2("mark[data-child]")) askHooks.hidePeek();
-      if (inAsk(e)) return;
-      hideAsk();
-    });
-    document.addEventListener("mouseup", function(e) {
-      if (inAsk(e)) return;
-      setTimeout(maybeShowAsk, 0);
-    });
-    askGo.addEventListener("click", function(e) {
-      submitAsk(null, motionSourceFromEvent(e));
-    });
-    document.getElementById("ask-lenses").addEventListener("click", function(e) {
-      var b = e.target.closest ? e.target.closest(".lens") : null;
-      if (b) submitAsk(b.getAttribute("data-lens"), motionSourceFromEvent(e));
-    });
-    askText.addEventListener("input", function() {
-      autoGrowEl(askText, 110);
-    });
-    askText.addEventListener("keydown", onAskTextKeydown);
-    composerText.addEventListener("input", function() {
-      autoGrowComposer();
-      updateComposerState();
-    });
-    composerText.addEventListener("keydown", function(e) {
-      if (e.key === "Enter" && !e.shiftKey) {
-        e.preventDefault();
-        submitFollowup("keyboard");
-      }
-    });
-    composerSend.addEventListener("click", function(e) {
-      submitFollowup(motionSourceFromEvent(e));
-    });
-    readerMain.addEventListener("wheel", interruptScrollAnimation, { passive: true });
-    readerMain.addEventListener("touchstart", interruptScrollAnimation, { passive: true });
-    readerMain.addEventListener("pointerdown", interruptScrollAnimation, { passive: true });
-    readerMain.addEventListener("scroll", function() {
-      if (performance.now() > scrollAnimIgnoreUntil) cancelScrollAnimation();
-    }, { passive: true });
-    document.addEventListener("keydown", interruptScrollAnimation);
-  }
-  function inAsk(e) {
-    return e.target && e.target.closest && e.target.closest("#ask");
-  }
-  function maybeShowAsk() {
-    var sel = window.getSelection();
-    if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
-    var anchor = sel.anchorNode && sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentNode : sel.anchorNode;
-    var dc = anchor && anchor.closest ? anchor.closest(".doc-content") : null;
-    if (!dc) return;
-    var parentId = dc.dataset.nodeId;
-    if (!parentId || !nodes[parentId] || nodes[parentId].status === "pending") return;
-    if (closed) {
-      flashHint(frozen ? "This is a read-only snapshot \u2014 asking needs the live Rabbithole." : "Session ended \u2014 reopen this Rabbithole from your terminal to keep asking.");
-      return;
-    }
-    var range = sel.getRangeAt(0);
-    if (!dc.contains(range.startContainer) || !dc.contains(range.endContainer)) return;
-    var startOff = charOffset(dc, range.startContainer, range.startOffset);
-    var endOff = charOffset(dc, range.endContainer, range.endOffset);
-    if (endOff <= startOff) return;
-    pendingAsk = {
-      parentId,
-      container: dc,
-      selectedText: sel.toString().trim(),
-      startOff,
-      endOff,
-      range: range.cloneRange()
-    };
-    paintAskHighlight(pendingAsk.range);
-    askText.value = "";
-    askText.placeholder = "Ask about this\u2026 \u21B5 = Explain";
-    var rect = range.getBoundingClientRect();
-    ask.style.left = Math.min(window.innerWidth - 392, Math.max(10, rect.left)) + "px";
-    ask.style.top = Math.min(window.innerHeight - 200, rect.bottom + 8) + "px";
-    ask.classList.add("visible");
-    setSurfaceOrigin(ask, rect);
-    autoGrowEl(askText, 110);
-    askText.focus();
-  }
-  var pendingAsk = null;
-  function hideAsk() {
-    ask.classList.remove("visible");
-    pendingAsk = null;
-    clearAskHighlight();
-  }
-  function paintAskHighlight(range) {
-    try {
-      if (window.Highlight && window.CSS && CSS.highlights) CSS.highlights.set("rh-ask", new Highlight(range));
-    } catch (e) {
-    }
-  }
-  function clearAskHighlight() {
-    try {
-      if (window.CSS && CSS.highlights) CSS.highlights.delete("rh-ask");
-    } catch (e) {
-    }
-  }
-  var LENS_KEYS = { "1": "explain", "2": "eli5", "3": "example", "4": "deeper" };
-  function onAskTextKeydown(e) {
-    if (e.key === "Enter" && !e.shiftKey) {
-      e.preventDefault();
-      submitAsk(null, "keyboard");
-    } else if (e.key === "Escape") {
-      hideAsk();
-    } else if (askText.value === "" && !e.metaKey && !e.ctrlKey && !e.altKey && LENS_KEYS[e.key]) {
-      e.preventDefault();
-      submitAsk(LENS_KEYS[e.key], "keyboard");
-    }
-  }
-  function submitAsk(lensKey, source2) {
-    if (!pendingAsk || closed) return;
-    var parent = nodes[pendingAsk.parentId];
-    if (!parent) {
-      hideAsk();
-      return;
-    }
-    var lens = lensKey && LENSES[lensKey] ? lensKey : null;
-    var question = lens ? LENSES[lens].q : askText.value.trim();
-    var requestId = uuid(), childId = uuid();
-    var pos = placeChild2(parent, BRANCH_SELECTION);
-    var anchor = { offset_start: pendingAsk.startOff, offset_end: pendingAsk.endOff };
-    var node = {
-      id: childId,
-      parent_id: parent.id,
-      title: lens ? lensLabel2(lens) : question ? truncate2(question, 48) : "\u2026",
-      html: "",
-      md: "",
-      base_url: parent.base_url || null,
-      base_url_source: parent.base_url ? "inherited" : null,
-      read: false,
-      origin: { selected_text: pendingAsk.selectedText, question, lens, anchor, branch_type: BRANCH_SELECTION },
-      x: pos.x,
-      y: pos.y,
-      w: DEFAULT_CHILD.w,
-      h: DEFAULT_CHILD.h,
-      font_scale: 1,
-      collapsed: false,
-      status: "pending",
-      _order: nextOrder(),
-      _startTs: Date.now()
-    };
-    nodes[childId] = node;
-    if (canvasBuilt) {
-      createNodeEl(node, true);
-      renderVisibility();
-      drawEdges();
-    }
-    if (mode === "reader") {
-      var rdc = readerMain.querySelector('.doc-content[data-node-id="' + parent.id + '"]');
-      wrapInContainer(rdc, anchor, childId, "hl mark-pending");
-      if (currentNodeId === parent.id) renderSidebar();
-    }
-    if (parent.bodyEl) {
-      wrapInContainer(parent.bodyEl.querySelector(".doc-content"), anchor, childId, "hl mark-pending");
-      scheduleEdges();
-    }
-    var sel = window.getSelection();
-    if (sel) sel.removeAllRanges();
-    hideAsk();
-    askHooks.post({
-      type: "branch_request",
-      request_id: requestId,
-      node_id: childId,
-      parent_id: parent.id,
-      selected_text: node.origin.selected_text,
-      question,
-      lens,
-      anchor,
-      branch_type: BRANCH_SELECTION,
-      position: { x: node.x, y: node.y },
-      size: { w: node.w, h: node.h }
-    }).then(function(res) {
-      if (!res || !res.ok) rollbackBranch(node);
-    });
-    revealNode(node, source2);
-    refreshAmbient();
-  }
-  function updateComposerState() {
-    var current = nodes[currentNodeId];
-    var down = closed || !current || current.status === "pending";
-    composerText.disabled = down;
-    composerInner.classList.toggle("disabled", down);
-    if (frozen) composerText.placeholder = "Read-only snapshot \u2014 open the live Rabbithole to keep asking";
-    else if (closed) composerText.placeholder = "Session ended \u2014 reopen this Rabbithole from your terminal; saved questions are answered there";
-    else if (current && current.status === "pending") composerText.placeholder = "This answer is still being written\u2026";
-    else if (connLost || !agentAttached) composerText.placeholder = "The agent is away \u2014 questions are saved and answered when it returns\u2026";
-    else composerText.placeholder = "Ask a follow-up about this document\u2026";
-    composerSend.disabled = down || !composerText.value.trim();
-  }
-  function autoGrowComposer() {
-    autoGrowEl(composerText, 140);
-  }
-  function sendFollowup(parent, question, lens, synthesis, opts) {
-    opts = opts || {};
-    var requestId = uuid(), childId = uuid();
-    var pos = opts.position || placeChild2(parent, BRANCH_FOLLOWUP);
-    var node = {
-      id: childId,
-      parent_id: parent.id,
-      title: opts.title || (synthesis ? "Synthesis" : lens ? lensLabel2(lens) : truncate2(question, 48)),
-      html: "",
-      md: "",
-      base_url: parent.base_url || null,
-      base_url_source: parent.base_url ? "inherited" : null,
-      read: false,
-      origin: { selected_text: opts.selectedText || "", question, lens, synthesis: !!synthesis, synthesis_mode: opts.synthesisMode || null, synthesis_sources: opts.synthesisSources || null, anchor: null, branch_type: BRANCH_FOLLOWUP },
-      x: pos.x,
-      y: pos.y,
-      w: DEFAULT_CHILD.w,
-      h: DEFAULT_CHILD.h,
-      font_scale: 1,
-      collapsed: false,
-      status: "pending",
-      _order: nextOrder(),
-      _startTs: Date.now()
-    };
-    nodes[childId] = node;
-    if (canvasBuilt) {
-      createNodeEl(node, true);
-      renderVisibility();
-      drawEdges();
-    }
-    if (currentNodeId === parent.id && mode === "reader") {
-      if (synthesis) renderSidebar();
-      else {
-        var t = ensureThread();
-        if (t) t.appendChild(buildThreadItem(node));
-      }
-    }
-    var payload = {
-      type: "branch_request",
-      request_id: requestId,
-      node_id: childId,
-      parent_id: parent.id,
-      selected_text: opts.selectedText || "",
-      question,
-      lens,
-      anchor: null,
-      branch_type: BRANCH_FOLLOWUP,
-      position: { x: node.x, y: node.y },
-      size: { w: node.w, h: node.h }
-    };
-    if (synthesis) payload.synthesis = true;
-    if (opts.synthesisMode) payload.synthesis_mode = opts.synthesisMode;
-    if (opts.synthesisSources) payload.synthesis_sources = opts.synthesisSources;
-    askHooks.post(payload).then(function(res) {
-      if (!res || !res.ok) rollbackBranch(node);
-    });
-    refreshAmbient();
-    return node;
-  }
-  var scrollAnimId = 0;
-  var scrollAnimIgnoreUntil = 0;
-  function cancelScrollAnimation() {
-    scrollAnimId++;
-  }
-  function setAnimatedScrollTop(el, value) {
-    scrollAnimIgnoreUntil = performance.now() + 80;
-    el.scrollTop = value;
-  }
-  function animateScroll(el, target, source2) {
-    var myId = ++scrollAnimId;
-    if (document.hidden || shouldReduceMotion() || source2 !== "pointer") {
-      el.scrollTop = target;
-      return;
-    }
-    var s = el.scrollTop, t0 = performance.now(), D2 = 240;
-    function step(t) {
-      if (myId !== scrollAnimId) return;
-      var p = Math.min(1, (t - t0) / D2), k = easeOutMotion(p);
-      setAnimatedScrollTop(el, s + (target - s) * k);
-      if (p < 1) requestAnimationFrame(step);
-    }
-    requestAnimationFrame(step);
-  }
-  function interruptScrollAnimation() {
-    cancelScrollAnimation();
-  }
-  function submitFollowup(source2) {
-    if (closed) {
-      flashHint(frozen ? "This is a read-only snapshot." : "Session ended \u2014 reopen this Rabbithole from your terminal to continue.");
-      return;
-    }
-    var parent = nodes[currentNodeId];
-    if (!parent || parent.status === "pending") return;
-    var question = composerText.value.trim();
-    if (!question) return;
-    sendFollowup(parent, question, null);
-    composerText.value = "";
-    autoGrowComposer();
-    updateComposerState();
-    animateScroll(readerMain, readerMain.scrollHeight, source2);
-  }
-  function rollbackBranch(node) {
-    var live = nodes[node.id];
-    if (!live || live.status === "answered") return;
-    delete nodes[node.id];
-    if (node.el && node.el.parentNode) node.el.parentNode.removeChild(node.el);
-    removeMarks(readerMain, node.id);
-    removeThreadItem(node.id);
-    var p = nodes[node.parent_id];
-    if (p && p.bodyEl) removeMarks(p.bodyEl, node.id);
-    if (canvasBuilt) drawEdges();
-    if (mode === "reader" && currentNodeId === node.parent_id) renderSidebar();
-    refreshAmbient();
-    flashHint("Couldn't reach the agent \u2014 that ask was undone.");
-  }
-  function placeChild2(parent, branchType) {
-    return placeChild(parent, branchType, {
-      childrenOf,
-      effH,
-      sort: nodeOrder2,
-      childSize: DEFAULT_CHILD
-    });
-  }
-
-  // src/ui/focus-trap.js
-  var FOCUSABLE = [
-    "a[href]",
-    "button:not([disabled])",
-    "textarea:not([disabled])",
-    "input:not([disabled])",
-    "select:not([disabled])",
-    "[tabindex]:not([tabindex='-1'])"
-  ].join(",");
-  function activateFocusTrap(root, options2) {
-    if (!root) return function() {
-    };
-    options2 = options2 || {};
-    var previous = document.activeElement;
-    if (!root.hasAttribute("tabindex")) root.setAttribute("tabindex", "-1");
-    function focusables() {
-      var all = root.querySelectorAll ? Array.prototype.slice.call(root.querySelectorAll(FOCUSABLE)) : [];
-      return all.filter(function(el) {
-        return el.offsetParent !== null || el === document.activeElement || el === options2.initialFocus;
-      });
-    }
-    function focusInitial() {
-      var target = options2.initialFocus || focusables()[0] || root;
-      try {
-        target.focus({ preventScroll: true });
-      } catch (e) {
-        try {
-          target.focus();
-        } catch (_e) {
-        }
-      }
-    }
-    function onKeydown(e) {
-      if (e.key === "Escape" && typeof options2.onEscape === "function") {
-        e.preventDefault();
-        e.stopPropagation();
-        options2.onEscape(e);
-        return;
-      }
-      if (e.key !== "Tab") return;
-      var items = focusables();
-      if (!items.length) {
-        e.preventDefault();
-        root.focus();
-        return;
-      }
-      var first = items[0];
-      var last = items[items.length - 1];
-      if (e.shiftKey && document.activeElement === first) {
-        e.preventDefault();
-        last.focus();
-      } else if (!e.shiftKey && document.activeElement === last) {
-        e.preventDefault();
-        first.focus();
-      }
-    }
-    document.addEventListener("keydown", onKeydown, true);
-    setTimeout(focusInitial, 0);
-    return function deactivateFocusTrap() {
-      document.removeEventListener("keydown", onKeydown, true);
-      if (options2.restoreFocus !== false && previous && previous.focus) {
-        try {
-          previous.focus({ preventScroll: true });
-        } catch (e) {
-          try {
-            previous.focus();
-          } catch (_e) {
-          }
-        }
-      }
-    };
-  }
-
-  // src/ui/image-ux.js
-  var imageResizeMemory = {};
-  var activeLightbox = null;
-  var IMAGE_MIN_WIDTH = 120;
-  var LIGHTBOX_MIN_ZOOM = 0.25;
-  var LIGHTBOX_MAX_ZOOM = 6;
-  function imageSurfaceScale(dc) {
-    if (!dc || !dc.offsetWidth) return 1;
-    var rect = dc.getBoundingClientRect();
-    return rect.width ? rect.width / dc.offsetWidth : 1;
-  }
-  function imageMemoryKey(dc, img, index, surfaceKey) {
-    var nodeId = dc && dc.dataset && dc.dataset.nodeId || "doc";
-    return String(surfaceKey || "surface") + ":" + nodeId + ":" + index + ":" + (img.getAttribute("src") || "");
-  }
-  function clampImageWidth(dc, value) {
-    var max = Math.max(IMAGE_MIN_WIDTH, dc ? dc.clientWidth : IMAGE_MIN_WIDTH);
-    return Math.max(IMAGE_MIN_WIDTH, Math.min(max, value));
-  }
-  function nearestImageScrollContainer(el) {
-    var cur = el ? el.parentElement : null;
-    while (cur && cur !== document.body && cur !== document.documentElement) {
-      var style = window.getComputedStyle(cur);
-      var oy = style.overflowY;
-      if ((oy === "auto" || oy === "scroll" || oy === "overlay") && cur.scrollHeight > cur.clientHeight + 1) return cur;
-      cur = cur.parentElement;
-    }
-    return document.scrollingElement || document.documentElement;
-  }
-  function imageScrollScale(scroller) {
-    if (!scroller || !scroller.offsetHeight) return 1;
-    var rect = scroller.getBoundingClientRect();
-    return rect.height ? rect.height / scroller.offsetHeight : 1;
-  }
-  function keepImageHandleAnchored(scroller, beforeRect, afterRect) {
-    if (!scroller || !beforeRect || !afterRect) return;
-    var delta = afterRect.bottom - beforeRect.bottom;
-    if (!delta) return;
-    scroller.scrollTop += delta / imageScrollScale(scroller);
-  }
-  function applyImageWidth(frame, width) {
-    frame.style.width = Math.round(width) + "px";
-    frame.dataset.rhResized = "1";
-  }
-  function resetImageWidth(frame, key) {
-    frame.style.width = "";
-    delete frame.dataset.rhResized;
-    if (key) delete imageResizeMemory[key];
-  }
-  function beginImageResize(e, dc, frame, key) {
-    if (e.button !== 0) return;
-    e.preventDefault();
-    e.stopPropagation();
-    hideAsk();
-    var scale = imageSurfaceScale(dc);
-    var startX = e.clientX;
-    var startW = frame.getBoundingClientRect().width / scale;
-    var scroller = nearestImageScrollContainer(frame);
-    try {
-      e.currentTarget.setPointerCapture(e.pointerId);
-    } catch (_e) {
-    }
-    function move(ev) {
-      ev.preventDefault();
-      ev.stopPropagation();
-      var next = clampImageWidth(dc, startW + (ev.clientX - startX) / scale);
-      var before = frame.getBoundingClientRect();
-      applyImageWidth(frame, next);
-      keepImageHandleAnchored(scroller, before, frame.getBoundingClientRect());
-      imageResizeMemory[key] = next;
-      scheduleEdges();
-    }
-    function done(ev) {
-      if (ev) ev.stopPropagation();
-      window.removeEventListener("pointermove", move, true);
-      window.removeEventListener("pointerup", done, true);
-      window.removeEventListener("pointercancel", done, true);
-      try {
-        e.currentTarget.releasePointerCapture(e.pointerId);
-      } catch (_e) {
-      }
-      scheduleEdges();
-    }
-    window.addEventListener("pointermove", move, true);
-    window.addEventListener("pointerup", done, true);
-    window.addEventListener("pointercancel", done, true);
-  }
-  function setLightboxTransform(img, state) {
-    img.style.setProperty("--rh-zoom", state.scale);
-    img.style.setProperty("--rh-pan-x", Math.round(state.x) + "px");
-    img.style.setProperty("--rh-pan-y", Math.round(state.y) + "px");
-  }
-  function clampLightboxZoom(value) {
-    return Math.max(LIGHTBOX_MIN_ZOOM, Math.min(LIGHTBOX_MAX_ZOOM, value));
-  }
-  function pointerDistance(a, b) {
-    var dx = a.clientX - b.clientX;
-    var dy = a.clientY - b.clientY;
-    return Math.sqrt(dx * dx + dy * dy);
-  }
-  function openImageLightbox(src, alt) {
-    closeImageLightbox();
-    var overlay = document.createElement("div");
-    overlay.className = "rh-lightbox";
-    overlay.setAttribute("role", "dialog");
-    overlay.setAttribute("aria-modal", "true");
-    overlay.setAttribute("aria-label", alt || "Image preview");
-    overlay.setAttribute("tabindex", "-1");
-    var img = document.createElement("img");
-    img.className = "rh-lightbox-img";
-    img.src = src;
-    img.alt = alt || "";
-    img.draggable = false;
-    overlay.appendChild(img);
-    document.body.appendChild(overlay);
-    var state = { scale: 1, x: 0, y: 0 };
-    var drag = null;
-    var pointers = {};
-    var pinch = null;
-    setLightboxTransform(img, state);
-    var trap = activateFocusTrap(overlay, { initialFocus: overlay, onEscape: closeImageLightbox });
-    activeLightbox = { el: overlay, key: onKey, trap };
-    function onKey(e) {
-      if (e.key !== "Escape") return;
-      e.preventDefault();
-      e.stopPropagation();
-      closeImageLightbox();
-    }
-    function clearPointer(id) {
-      delete pointers[id];
-      var keys = Object.keys(pointers);
-      if (keys.length < 2) pinch = null;
-      if (!keys.length) drag = null;
-    }
-    overlay.addEventListener("click", function(e) {
-      if (e.target === overlay) closeImageLightbox();
-    });
-    overlay.addEventListener("wheel", function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      var next = clampLightboxZoom(state.scale * (e.deltaY < 0 ? 1.12 : 0.88));
-      state.scale = next;
-      if (state.scale <= 1) {
-        state.x = 0;
-        state.y = 0;
-      }
-      setLightboxTransform(img, state);
-    }, { passive: false });
-    overlay.addEventListener("pointerdown", function(e) {
-      e.preventDefault();
-      e.stopPropagation();
-      pointers[e.pointerId] = { clientX: e.clientX, clientY: e.clientY };
-      try {
-        overlay.setPointerCapture(e.pointerId);
-      } catch (_e) {
-      }
-      var ids = Object.keys(pointers);
-      if (ids.length >= 2) {
-        pinch = { dist: pointerDistance(pointers[ids[0]], pointers[ids[1]]), scale: state.scale };
-        drag = null;
-      } else if (e.target === img && state.scale > 1) {
-        drag = { x: e.clientX, y: e.clientY, ox: state.x, oy: state.y };
-      }
-    });
-    overlay.addEventListener("pointermove", function(e) {
-      if (!pointers[e.pointerId]) return;
-      e.preventDefault();
-      e.stopPropagation();
-      pointers[e.pointerId] = { clientX: e.clientX, clientY: e.clientY };
-      var ids = Object.keys(pointers);
-      if (pinch && ids.length >= 2) {
-        var dist = pointerDistance(pointers[ids[0]], pointers[ids[1]]);
-        if (pinch.dist > 0) state.scale = clampLightboxZoom(pinch.scale * dist / pinch.dist);
-        if (state.scale <= 1) {
-          state.x = 0;
-          state.y = 0;
-        }
-        setLightboxTransform(img, state);
-      } else if (drag && state.scale > 1) {
-        state.x = drag.ox + e.clientX - drag.x;
-        state.y = drag.oy + e.clientY - drag.y;
-        setLightboxTransform(img, state);
-      }
-    });
-    overlay.addEventListener("pointerup", function(e) {
-      clearPointer(e.pointerId);
-    });
-    overlay.addEventListener("pointercancel", function(e) {
-      clearPointer(e.pointerId);
-    });
-    document.addEventListener("keydown", onKey, true);
-  }
-  function closeImageLightbox() {
-    if (!activeLightbox) return;
-    document.removeEventListener("keydown", activeLightbox.key, true);
-    if (typeof activeLightbox.trap === "function") activeLightbox.trap();
-    if (activeLightbox.el && activeLightbox.el.parentNode) activeLightbox.el.parentNode.removeChild(activeLightbox.el);
-    activeLightbox = null;
-  }
-  function mountDocImages(dc, node, base, surfaceKey) {
-    if (!dc || !dc.querySelectorAll) return;
-    var imgs = dc.querySelectorAll("img");
-    for (var i2 = 0; i2 < imgs.length; i2++) {
-      var img = imgs[i2];
-      if (img.dataset.rhImgReady === "1") continue;
-      if (img.closest(".viz, .viz-mounted")) continue;
-      var frame = img.parentNode && img.parentNode.classList && img.parentNode.classList.contains("rh-img-frame") ? img.parentNode : null;
-      if (!frame) {
-        frame = document.createElement("span");
-        frame.className = "rh-img-frame";
-        img.parentNode.insertBefore(frame, img);
-        frame.appendChild(img);
-      }
-      var key = imageMemoryKey(dc, img, i2, surfaceKey || visualSurfaceKey(node, base));
-      img.dataset.rhImgReady = "1";
-      img.draggable = false;
-      if (imageResizeMemory[key]) applyImageWidth(frame, imageResizeMemory[key]);
-      var handle = document.createElement("button");
-      handle.type = "button";
-      handle.className = "rh-img-handle";
-      handle.setAttribute("aria-label", "Resize image");
-      handle.title = "Drag to resize \xB7 double-click to reset";
-      frame.appendChild(handle);
-      frame.addEventListener("pointerdown", function(e) {
-        e.stopPropagation();
-      });
-      img.addEventListener("click", function(e) {
-        e.preventDefault();
-        e.stopPropagation();
-        openImageLightbox(e.currentTarget.currentSrc || e.currentTarget.src, e.currentTarget.alt);
-      });
-      handle.addEventListener("pointerdown", /* @__PURE__ */ (function(f, k) {
-        return function(e) {
-          beginImageResize(e, dc, f, k);
-        };
-      })(frame, key));
-      handle.addEventListener("dblclick", /* @__PURE__ */ (function(f, k) {
-        return function(e) {
-          e.preventDefault();
-          e.stopPropagation();
-          var scroller = nearestImageScrollContainer(f);
-          var before = f.getBoundingClientRect();
-          resetImageWidth(f, k);
-          keepImageHandleAnchored(scroller, before, f.getBoundingClientRect());
-          scheduleEdges();
-        };
-      })(frame, key));
-    }
-  }
-
-  // src/ui/palette.js
-  var paletteHooks = {
-    hideAsk: function() {
-    },
-    hidePeek: function() {
-    },
-    closeShare: function() {
-    },
-    closeSourcesPanel: function() {
-    },
-    hideConfirm: function() {
-    }
-  };
-  function registerPaletteHooks(hooks) {
-    Object.assign(paletteHooks, hooks || {});
-  }
-  function getPlain(node) {
-    if (node._plainFor !== node.html) {
-      var d = document.createElement("div");
-      d.innerHTML = node.html || "";
-      node._plainFor = node.html;
-      node._plain = d.textContent || "";
-    }
-    return node._plain || "";
-  }
-  var palOpen = false;
-  var palSel = 0;
-  var palItems = [];
-  var palCanvasCommands = false;
-  var palTrap = null;
-  function initPalette() {
-    paletteEl.addEventListener("mousedown", function(e) {
-      if (e.target === paletteEl) closePalette();
-    });
-    palText.addEventListener("input", function() {
-      renderPalette(palText.value);
-    });
-    palText.addEventListener("keydown", onPaletteKeydown);
-    palResults.addEventListener("click", onPaletteClick);
-    palResults.addEventListener("mousemove", onPaletteMousemove);
-  }
-  function togglePalette() {
-    if (palOpen) closePalette();
-    else openPalette();
-  }
-  function openPalette() {
-    palOpen = true;
-    palCanvasCommands = mode === "canvas";
-    paletteHooks.hideAsk();
-    paletteHooks.hidePeek();
-    paletteHooks.closeShare();
-    paletteHooks.closeSourcesPanel();
-    paletteHooks.hideConfirm();
-    paletteEl.classList.add("visible");
-    palText.value = "";
-    renderPalette("");
-    if (palTrap) palTrap();
-    palTrap = activateFocusTrap(paletteEl, { initialFocus: palText, onEscape: closePalette });
-  }
-  function closePalette() {
-    palOpen = false;
-    palCanvasCommands = false;
-    paletteEl.classList.remove("visible");
-    if (palTrap) {
-      palTrap();
-      palTrap = null;
-    }
-    palText.blur();
-  }
-  function onPaletteKeydown(e) {
-    if (e.key === "Escape") {
-      e.stopPropagation();
-      closePalette();
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      movePalSel(1);
-    } else if (e.key === "ArrowUp") {
-      e.preventDefault();
-      movePalSel(-1);
-    } else if (e.key === "Enter") {
-      e.preventDefault();
-      commitPal("keyboard");
-    }
-  }
-  function renderPalette(q) {
-    var tokens = q.toLowerCase().split(/\s+/).filter(function(t2) {
-      return !!t2;
-    });
-    var scored = [];
-    for (var id in nodes) {
-      var n = nodes[id];
-      var title = (n.title || "").toLowerCase();
-      var ask2 = ((n.origin && n.origin.selected_text || "") + " " + (n.origin && n.origin.question || "")).toLowerCase();
-      var body2 = getPlain(n).toLowerCase();
-      var score = 0, ok = true;
-      for (var i2 = 0; i2 < tokens.length; i2++) {
-        var t = tokens[i2];
-        if (title.indexOf(t) !== -1) score += title.indexOf(t) === 0 ? 40 : 30;
-        else if (ask2.indexOf(t) !== -1) score += 15;
-        else if (body2.indexOf(t) !== -1) score += 5;
-        else {
-          ok = false;
-          break;
-        }
-      }
-      if (!ok) continue;
-      scored.push({ n, score });
-    }
-    scored.sort(function(a, b) {
-      return b.score - a.score || (b.n._order || 0) - (a.n._order || 0);
-    });
-    scored = scored.slice(0, 12);
-    palItems = scored.map(function(s) {
-      return { type: "node", id: s.n.id };
-    }).concat(paletteCommandItems(tokens));
-    palSel = 0;
-    if (!palItems.length) {
-      palResults.innerHTML = tokens.length ? '<div class="pal-empty">Nothing in this hole matches that.</div>' : "";
-      return;
-    }
-    var html2 = "";
-    palItems.forEach(function(item, i3) {
-      if (item.type === "command") {
-        html2 += '<div class="pal-item pal-command' + (i3 === palSel ? " sel" : "") + '" data-idx="' + i3 + '">';
-        html2 += '<div class="pal-t"><span class="pal-title">' + esc(item.name) + '</span><kbd class="pal-kbd">' + esc(item.kbd) + "</kbd></div>";
-        html2 += "</div>";
-        return;
-      }
-      var n2 = nodes[item.id];
-      if (!n2) return;
-      var badge = n2.origin && n2.origin.synthesis ? '<span class="lens-badge">\u2726 ' + (n2.origin.synthesis_mode === "question_map" ? "Question Map" : "Synthesis") + "</span>" : n2.origin && n2.origin.lens ? lensBadgeHtml(n2.origin.lens) : "";
-      var flags = n2.status === "pending" ? '<span class="pal-writing">writing\u2026</span>' : isUnread(n2) ? '<span class="pal-dot"></span>' : "";
-      html2 += '<div class="pal-item' + (i3 === palSel ? " sel" : "") + '" data-idx="' + i3 + '">';
-      html2 += '<div class="pal-t">' + flags + '<span class="pal-title">' + esc(n2.title || "Untitled") + "</span>" + badge + "</div>";
-      html2 += '<div class="pal-s">' + palSnippet(n2, tokens) + "</div>";
-      html2 += "</div>";
-    });
-    palResults.innerHTML = html2;
-  }
-  function paletteCommandItems(tokens) {
-    if (!palCanvasCommands) return [];
-    var commands = [
-      { type: "command", name: "Frame everything", kbd: "F", run: function() {
-        frameAll(true, "keyboard");
-      } },
-      { type: "command", name: "Tidy up layout", kbd: "T", run: function() {
-        tidy("keyboard");
-      } }
-    ];
-    var out = [];
-    for (var i2 = 0; i2 < commands.length; i2++) {
-      var c2 = commands[i2];
-      var name = c2.name.toLowerCase();
-      var ok = true;
-      for (var t = 0; t < tokens.length; t++) {
-        if (name.indexOf(tokens[t]) === -1) {
-          ok = false;
-          break;
-        }
-      }
-      if (ok) out.push(c2);
-    }
-    return out;
-  }
-  function palSnippet(n, tokens) {
-    var body2 = getPlain(n);
-    var lower = body2.toLowerCase();
-    for (var i2 = 0; i2 < tokens.length; i2++) {
-      var at = lower.indexOf(tokens[i2]);
-      if (at !== -1) {
-        var start = Math.max(0, at - 34);
-        var slice = (start > 0 ? "\u2026" : "") + body2.slice(start, start + 120);
-        return hiTokens(slice, tokens);
-      }
-    }
-    var quote = n.origin && n.origin.selected_text;
-    if (quote) return "\u201C" + hiTokens(truncate2(quote, 90), tokens) + "\u201D";
-    var q = n.origin && n.origin.question;
-    if (q) return hiTokens(truncate2(q, 100), tokens);
-    return esc(truncate2(body2, 100));
-  }
-  function hiTokens(text2, tokens) {
-    if (!tokens.length) return esc(text2);
-    var lower = text2.toLowerCase(), out = "", i2 = 0;
-    while (i2 < text2.length) {
-      var best = -1, bl = 0;
-      for (var t = 0; t < tokens.length; t++) {
-        var at = lower.indexOf(tokens[t], i2);
-        if (at !== -1 && (best === -1 || at < best)) {
-          best = at;
-          bl = tokens[t].length;
-        }
-      }
-      if (best === -1) {
-        out += esc(text2.slice(i2));
-        break;
-      }
-      out += esc(text2.slice(i2, best)) + "<mark>" + esc(text2.slice(best, best + bl)) + "</mark>";
-      i2 = best + bl;
-    }
-    return out;
-  }
-  function movePalSel(delta) {
-    if (!palItems.length) return;
-    palSel = Math.max(0, Math.min(palItems.length - 1, palSel + delta));
-    var items = palResults.querySelectorAll(".pal-item");
-    for (var i2 = 0; i2 < items.length; i2++) items[i2].classList.toggle("sel", i2 === palSel);
-    if (items[palSel]) items[palSel].scrollIntoView({ block: "nearest" });
-  }
-  function commitPal(source2) {
-    var item = palItems[palSel];
-    if (!item) return;
-    if (item.type === "command") {
-      item.run();
-      closePalette();
-      return;
-    }
-    var node = nodes[item.id];
-    closePalette();
-    if (node) goToNode(node, source2);
-  }
-  function onPaletteClick(e) {
-    var it = e.target.closest(".pal-item");
-    if (!it) return;
-    palSel = Number(it.dataset.idx) || 0;
-    commitPal(motionSourceFromEvent(e));
-  }
-  function onPaletteMousemove(e) {
-    var it = e.target.closest(".pal-item");
-    if (!it) return;
-    var idx = Number(it.dataset.idx) || 0;
-    if (idx !== palSel) {
-      palSel = idx;
-      var items = palResults.querySelectorAll(".pal-item");
-      for (var i2 = 0; i2 < items.length; i2++) items[i2].classList.toggle("sel", i2 === palSel);
-    }
-  }
-
-  // src/core/sources.js
-  var URL_RE = /https?:\/\/[^\s)<>'"]+/gi;
-  var PMID_RE = /(?:\bPMID\s*:?\s*|pubmed\.ncbi\.nlm\.nih\.gov\/)(\d{5,9})/gi;
-  var DOI_RE = /(?:\bDOI\s*:?\s*|https?:\/\/(?:dx\.)?doi\.org\/)(10\.\d{4,9}\/[^\s\])<>'"`]+)/gi;
-  var ARXIV_RE = /(?:\barXiv\s*:?\s*|arxiv\.org\/(?:abs|pdf)\/)(\d{4}\.\d{4,5}(?:v\d+)?|[a-z-]+\/\d{7}(?:v\d+)?)/gi;
-  function buildSourcesOverview(inputNodes) {
-    var _a2;
-    const nodeList = normalizeNodeList(inputNodes);
-    const byId = new Map(nodeList.map((node) => [node.id, node]));
-    const sources = /* @__PURE__ */ new Map();
-    const directByNode = /* @__PURE__ */ new Map();
-    for (const node of nodeList) {
-      const keys = /* @__PURE__ */ new Set();
-      const add = (source2) => {
-        if (!source2) return;
-        keys.add(source2.key);
-        upsertSource(sources, source2, node.id, "direct");
-      };
-      for (const source2 of extractSourcesFromNode(node)) add(source2);
-      directByNode.set(node.id, keys);
-    }
-    const derivedNodes = [];
-    for (const node of nodeList) {
-      const sourceIds = Array.isArray((_a2 = node.origin) == null ? void 0 : _a2.synthesis_sources) ? node.origin.synthesis_sources : [];
-      if (!sourceIds.length) continue;
-      const derivedKeys = /* @__PURE__ */ new Set();
-      for (const sourceId of sourceIds) {
-        for (const key of directByNode.get(String(sourceId)) || []) derivedKeys.add(key);
-      }
-      for (const key of derivedKeys) {
-        const source2 = sources.get(key);
-        if (source2) addUnique(source2.derived_node_ids, node.id);
-      }
-      derivedNodes.push({
-        id: node.id,
-        title: node.title,
-        source_node_ids: sourceIds.filter((id) => byId.has(String(id))).map(String),
-        source_keys: [...derivedKeys].sort()
-      });
-    }
-    const nodesWithoutSources = nodeList.filter((node) => !(directByNode.get(node.id) || /* @__PURE__ */ new Set()).size).map((node) => ({ id: node.id, title: node.title }));
-    return {
-      sources: [...sources.values()].sort(compareSources),
-      nodes_without_sources: nodesWithoutSources,
-      derived_nodes: derivedNodes
-    };
-  }
-  function extractSourcesFromNode(rawNode) {
-    const node = normalizeNode(rawNode);
-    const text2 = [node.base_url || "", node.markdown || ""].join("\n");
-    const found = /* @__PURE__ */ new Map();
-    const add = (source2) => {
-      if (source2) found.set(source2.key, source2);
-    };
-    scan(PMID_RE, text2, (match) => add(pmidSource(match[1])));
-    scan(DOI_RE, text2, (match) => add(doiSource(cleanDoi(match[1]))));
-    scan(ARXIV_RE, text2, (match) => add(arxivSource(match[1])));
-    scan(URL_RE, text2, (match) => add(urlSource(match[0])));
-    return [...found.values()].sort(compareSources);
-  }
-  function normalizeNodeList(inputNodes) {
-    const raw = Array.isArray(inputNodes) ? inputNodes : Object.values(inputNodes || {});
-    return raw.map(normalizeNode).filter((node) => node.id);
-  }
-  function normalizeNode(node) {
-    var _a2, _b;
-    return {
-      id: String((node == null ? void 0 : node.id) || ""),
-      title: String((node == null ? void 0 : node.title) || "Untitled"),
-      markdown: String((_b = (_a2 = node == null ? void 0 : node.markdown) != null ? _a2 : node == null ? void 0 : node.md) != null ? _b : ""),
-      base_url: (node == null ? void 0 : node.base_url) || null,
-      origin: (node == null ? void 0 : node.origin) || null
-    };
-  }
-  function scan(re, text2, cb) {
-    re.lastIndex = 0;
-    let match;
-    while (match = re.exec(text2)) cb(match);
-  }
-  function upsertSource(map, source2, nodeId, kind) {
-    const current = map.get(source2.key) || {
-      ...source2,
-      node_ids: [],
-      derived_node_ids: []
-    };
-    addUnique(kind === "derived" ? current.derived_node_ids : current.node_ids, nodeId);
-    map.set(source2.key, current);
-  }
-  function addUnique(list2, value) {
-    const v = String(value || "");
-    if (v && !list2.includes(v)) list2.push(v);
-  }
-  function pmidSource(value) {
-    const pmid = String(value || "").replace(/\D/g, "");
-    if (!pmid) return null;
-    return { key: `pmid:${pmid}`, type: "pmid", label: `PMID: ${pmid}`, url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` };
-  }
-  function doiSource(value) {
-    const doi = cleanDoi(value);
-    if (!doi) return null;
-    return { key: `doi:${doi.toLowerCase()}`, type: "doi", label: `DOI: ${doi}`, url: `https://doi.org/${doi}` };
-  }
-  function arxivSource(value) {
-    const id = stripTrailing(String(value || ""));
-    if (!id) return null;
-    return { key: `arxiv:${id.toLowerCase()}`, type: "arxiv", label: `arXiv: ${id}`, url: `https://arxiv.org/abs/${id}` };
-  }
-  function urlSource(value) {
-    const url = stripTrailing(String(value || ""));
-    if (!url) return null;
-    const pmid = /pubmed\.ncbi\.nlm\.nih\.gov\/(\d{5,9})/i.exec(url);
-    if (pmid) return pmidSource(pmid[1]);
-    const doi = /(?:dx\.)?doi\.org\/(10\.\d{4,9}\/.+)/i.exec(url);
-    if (doi) return doiSource(doi[1]);
-    const arxiv = /arxiv\.org\/(?:abs|pdf)\/(\d{4}\.\d{4,5}(?:v\d+)?|[a-z-]+\/\d{7}(?:v\d+)?)/i.exec(url);
-    if (arxiv) return arxivSource(arxiv[1]);
-    return { key: `url:${url}`, type: "url", label: url.replace(/^https?:\/\//, ""), url };
-  }
-  function cleanDoi(value) {
-    return stripTrailing(String(value || "").replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, ""));
-  }
-  function stripTrailing(value) {
-    return String(value || "").trim().replace(/[.,;:!?]+$/g, "").replace(/\)+$/g, "");
-  }
-  function compareSources(a, b) {
-    return `${a.type}:${a.label}`.localeCompare(`${b.type}:${b.label}`);
-  }
-
-  // src/ui/sources-panel.js
-  var panel = null;
-  var body = null;
-  var open = false;
-  var releaseTrap = null;
-  function initSourcesPanel() {
-    panel = document.getElementById("sources-panel");
-    body = document.getElementById("sources-body");
-    document.getElementById("r-sources").addEventListener("click", function(e) {
-      toggleSourcesPanel(motionSourceFromEvent(e));
-    });
-    document.getElementById("t-sources").addEventListener("click", function(e) {
-      toggleSourcesPanel(motionSourceFromEvent(e));
-    });
-    document.getElementById("sources-close").addEventListener("click", closeSourcesPanel);
-    panel.addEventListener("click", onPanelClick);
-  }
-  function closeSourcesPanel() {
-    open = false;
-    if (panel) {
-      panel.classList.remove("visible");
-      panel.setAttribute("aria-hidden", "true");
-    }
-    if (releaseTrap) {
-      releaseTrap();
-      releaseTrap = null;
-    }
-  }
-  function toggleSourcesPanel(source2) {
-    if (open) {
-      closeSourcesPanel();
-      return;
-    }
-    renderSourcesPanel(source2);
-    open = true;
-    panel.classList.add("visible");
-    panel.setAttribute("aria-hidden", "false");
-    if (releaseTrap) releaseTrap();
-    releaseTrap = activateFocusTrap(panel, { initialFocus: panel.querySelector("button"), onEscape: closeSourcesPanel });
-  }
-  function renderSourcesPanel(source2) {
-    var overview = buildSourcesOverview(nodes);
-    var html2 = "";
-    html2 += renderSources(overview.sources);
-    html2 += renderDerived(overview.derived_nodes);
-    html2 += renderUnsourced(overview.nodes_without_sources);
-    body.innerHTML = html2 || '<div class="sources-empty">No nodes yet.</div>';
-    body.dataset.source = source2 || "pointer";
-  }
-  function renderSources(sources) {
-    if (!sources.length) return '<div class="sources-section"><h4>Sources</h4><div class="sources-empty">No explicit sources found yet. Add PMID, DOI, arXiv, URLs, markdown links, or node base_url values.</div></div>';
-    var html2 = '<div class="sources-section"><h4>Sources (' + sources.length + ")</h4>";
-    for (var i2 = 0; i2 < sources.length; i2++) {
-      var source2 = sources[i2];
-      var direct = source2.node_ids || [];
-      var derived = source2.derived_node_ids || [];
-      html2 += '<div class="source-card">';
-      html2 += '<div class="source-main"><span class="source-type">' + esc(source2.type) + "</span>";
-      html2 += source2.url ? '<a class="source-label source-link" href="' + esc(source2.url) + '" target="_blank" rel="noreferrer">' + esc(source2.label) + "</a>" : '<span class="source-label">' + esc(source2.label) + "</span>";
-      html2 += "</div>";
-      html2 += '<div class="source-meta">Used directly by ' + direct.length + " node" + (direct.length === 1 ? "" : "s") + (derived.length ? ", inherited by " + derived.length + " derived node" + (derived.length === 1 ? "" : "s") : "") + ".</div>";
-      html2 += nodeButtons(direct, "Direct") + nodeButtons(derived, "Derived");
-      html2 += "</div>";
-    }
-    return html2 + "</div>";
-  }
-  function renderDerived(derived) {
-    if (!derived.length) return "";
-    var html2 = '<div class="sources-section"><h4>Derived Nodes</h4>';
-    for (var i2 = 0; i2 < derived.length; i2++) {
-      var node = derived[i2];
-      html2 += '<div class="source-node-card">';
-      html2 += '<button class="source-node" data-node="' + esc(node.id) + '">' + esc(truncate2(node.title || "Untitled", 54)) + "</button>";
-      html2 += '<div class="source-meta">Derived from ' + node.source_node_ids.length + " selected node" + (node.source_node_ids.length === 1 ? "" : "s") + " and " + node.source_keys.length + " source" + (node.source_keys.length === 1 ? "" : "s") + ".</div>";
-      html2 += nodeButtons(node.source_node_ids, "Source nodes");
-      html2 += "</div>";
-    }
-    return html2 + "</div>";
-  }
-  function renderUnsourced(nodesWithoutSources) {
-    if (!nodesWithoutSources.length) return "";
-    var html2 = '<div class="sources-section"><h4>No Explicit Sources (' + nodesWithoutSources.length + ")</h4>";
-    html2 += '<div class="source-node-list">';
-    for (var i2 = 0; i2 < nodesWithoutSources.length; i2++) {
-      var node = nodesWithoutSources[i2];
-      html2 += '<button class="source-node" data-node="' + esc(node.id) + '">' + esc(truncate2(node.title || "Untitled", 42)) + "</button>";
-    }
-    return html2 + "</div></div>";
-  }
-  function nodeButtons(ids, label) {
-    if (!ids || !ids.length) return "";
-    var html2 = '<div class="source-meta">' + esc(label) + '</div><div class="source-node-list">';
-    for (var i2 = 0; i2 < ids.length; i2++) {
-      var node = nodes[ids[i2]];
-      if (!node) continue;
-      html2 += '<button class="source-node" data-node="' + esc(node.id) + '">' + esc(truncate2(node.title || "Untitled", 42)) + "</button>";
-    }
-    return html2 + "</div>";
-  }
-  function onPanelClick(e) {
-    var btn = e.target.closest && e.target.closest("button[data-node]");
-    if (!btn) return;
-    var node = nodes[btn.dataset.node];
-    if (!node) {
-      flashHint("That node is no longer available.");
-      return;
-    }
-    closeSourcesPanel();
-    goToNode(node, body.dataset.source || "pointer");
-  }
-
-  // src/core/html/shell.js
-  var CANVAS_SHELL = `
-<div id="reader">
-  <div id="reader-top">
-    <div id="breadcrumb"></div>
-    <button class="activity" id="act-reader" title="Jump to it" aria-label="Jump to active answer"></button>
-    <button class="tool-btn" id="r-textdown" title="Smaller text">A\u2212</button>
-    <button class="tool-btn" id="r-textup" title="Larger text">A+</button>
-    <button class="tool-btn" id="r-canvas" title="Open the spatial canvas">\u2922 Canvas</button>
-    <button class="tool-btn" id="r-sources" title="Show sources overview">Sources</button>
-    <button class="tool-btn" id="r-share" title="Share, export, synthesize">\u2197 Share</button>
-    <button class="tool-btn" id="r-theme" title="Toggle theme" aria-label="Toggle theme">\u25D1</button>
-    <button class="tool-btn" id="r-done" title="End the session (the hole stays saved)">Done</button>
-  </div>
-  <div id="since"><span class="since-dot"></span><span class="since-msg" id="since-msg"></span><button class="tool-btn" id="since-show">Show me</button><button id="since-x" title="Dismiss" aria-label="Dismiss activity notice">\xD7</button></div>
-  <div id="reader-cols">
-    <div id="reader-center">
-      <div id="reader-main"></div>
-      <div id="composer">
-        <div class="composer-inner" id="composer-inner">
-          <textarea id="composer-text" rows="1" placeholder="Ask a follow-up about this document\u2026"></textarea>
-          <button id="composer-send" class="send-btn" title="Send (\u21B5)" aria-label="Send follow-up" disabled><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 12.8V3.6M8 3.6 3.9 7.7M8 3.6l4.1 4.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-        </div>
-      </div>
-    </div>
-    <div id="reader-side"></div>
-  </div>
-</div>
-
-<div id="viewport"><div id="world"><svg id="edges"></svg></div></div>
-<div id="toolbar">
-  <button class="tool-btn" id="t-reader" title="Back to reading"><svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" aria-hidden="true"><path d="M3.75 3.25h4.5c1 0 1.8.8 1.8 1.8v7.7H5.15c-.77 0-1.4-.63-1.4-1.4z"/><path d="M5.15 12.75c-.77 0-1.4-.63-1.4-1.4s.63-1.4 1.4-1.4h4.9"/></svg>Reader</button>
-  <span class="sep"></span>
-  <button class="tool-btn tool-icon" id="t-zout" title="Zoom out" aria-label="Zoom out">\u2212</button>
-  <button class="tool-btn" id="zoom-label" title="Zoom to 100%" aria-label="Zoom to 100%">100%</button>
-  <button class="tool-btn tool-icon" id="t-zin" title="Zoom in" aria-label="Zoom in">+</button>
-  <button class="tool-btn tool-icon" id="t-frame" title="Frame everything \xB7 F" aria-label="Frame everything \xB7 F"><svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" aria-hidden="true"><path d="M5.8 3.25H3.25V5.8"/><path d="M10.2 3.25h2.55V5.8"/><path d="M12.75 10.2v2.55H10.2"/><path d="M5.8 12.75H3.25V10.2"/></svg></button>
-  <span class="sep"></span>
-  <button class="tool-btn tool-icon" id="t-tidy" title="Tidy up layout \xB7 T" aria-label="Tidy up layout \xB7 T"><svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" aria-hidden="true"><rect x="6.25" y="2.5" width="3.5" height="2.75" rx="0.7"/><rect x="2.75" y="10.75" width="3.5" height="2.75" rx="0.7"/><rect x="9.75" y="10.75" width="3.5" height="2.75" rx="0.7"/><path d="M8 5.25v2.25"/><path d="M4.5 7.5h7"/><path d="M4.5 7.5v3.25"/><path d="M11.5 7.5v3.25"/></svg></button>
-  <button class="tool-btn" id="t-synth-prompt" title="Synthesize selected nodes" disabled>\u25EB Synthesize <span id="t-synth-count">0</span></button>
-  <span class="sep"></span>
-  <button class="tool-btn" id="t-sources" title="Show sources overview">Sources</button>
-  <button class="tool-btn tool-icon" id="t-share" title="Share, export, synthesize" aria-label="Share, export, synthesize">\u2197</button>
-  <button class="tool-btn tool-icon" id="t-theme" title="Toggle theme" aria-label="Toggle theme">\u25D1</button>
-  <span class="sep" id="act-sep" style="display:none"></span>
-  <button class="activity" id="act-canvas" title="Jump to it" aria-label="Jump to active answer"></button>
-</div>
-
-<div id="ask">
-  <div class="ask-input">
-    <textarea id="ask-text" rows="1" placeholder="Ask about this\u2026 \u21B5 = Explain"></textarea>
-    <button class="send-btn" id="ask-go" title="Ask (\u21B5)" aria-label="Ask"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 12.8V3.6M8 3.6 3.9 7.7M8 3.6l4.1 4.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
-  </div>
-  <div class="ask-lenses" id="ask-lenses">
-    <button class="lens" data-lens="explain">Explain <kbd>1</kbd></button>
-    <button class="lens" data-lens="eli5">ELI5 <kbd>2</kbd></button>
-    <button class="lens" data-lens="example">Example <kbd>3</kbd></button>
-    <button class="lens" data-lens="deeper">Go Deeper <kbd>4</kbd></button>
-  </div>
-</div>
-
-<div id="synth-panel">
-  <div class="synth-head"><span>Selected synthesis</span><button id="synth-close" title="Close" aria-label="Close">\xD7</button></div>
-  <div class="synth-meta"><span id="synth-count">0</span> selected nodes will be used as sources.</div>
-  <label class="synth-mode-label" for="synth-mode">Output</label>
-  <select id="synth-mode">
-    <option value="synthesis">Synthesis</option>
-    <option value="question_map">Question Map</option>
-  </select>
-  <textarea id="synth-text" rows="3" placeholder="What should the synthesis focus on? e.g. Turn these nodes into one thesis architecture proposal, keep tradeoffs and next steps."></textarea>
-  <div class="synth-actions"><button class="tool-btn" id="synth-cancel">Cancel</button><button class="send-btn" id="synth-send" title="Create synthesis" aria-label="Create synthesis" disabled><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 12.8V3.6M8 3.6 3.9 7.7M8 3.6l4.1 4.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
-</div>
-
-<div id="palette"><div id="palette-panel">
-  <div class="pal-input">
-    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.6" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
-    <input id="pal-text" placeholder="Search this Rabbithole\u2026" autocomplete="off" spellcheck="false">
-    <kbd>esc</kbd>
-  </div>
-  <div id="pal-results"></div>
-</div></div>
-
-<div id="peek"></div>
-
-<div id="sources-panel" aria-hidden="true">
-  <div class="sources-head"><span>Sources</span><button id="sources-close" title="Close" aria-label="Close">\xD7</button></div>
-  <div class="sources-body" id="sources-body"></div>
-</div>
-
-<div id="sharemenu">
-  <button class="sm-item" id="sm-trail"><span class="sm-ic">\u2937</span>Copy trail as Markdown</button>
-  <button class="sm-item" id="sm-doc"><span class="sm-ic">\u29C9</span>Copy document as Markdown</button>
-  <div class="sm-sep"></div>
-  <button class="sm-item" id="sm-export"><span class="sm-ic">\u21E9</span>Download snapshot (.html)</button>
-  <button class="sm-item" id="sm-json"><span class="sm-ic">{}</span>Download session JSON (.json)</button>
-  <button class="sm-item" id="sm-portable"><span class="sm-ic">\u21E3</span>Export Rabbithole (.rabbithole)</button>
-  <div class="sm-sep" id="sm-sep2"></div>
-  <button class="sm-item" id="sm-synth-selected"><span class="sm-ic">\u25EB</span>Synthesize selected nodes</button>
-  <button class="sm-item" id="sm-synth"><span class="sm-ic">\u2726</span>Synthesize this journey</button>
-</div>
-
-<div id="confirm">
-  <div class="cf-msg" id="cf-msg"></div>
-  <div class="cf-row"><button id="cf-keep">Keep</button><button class="cf-remove" id="cf-remove">Remove</button></div>
-</div>
-
-<div id="banner"><div class="banner-body"><span class="banner-title" id="banner-title"></span><span id="banner-msg"></span></div><button id="banner-x" title="Dismiss" aria-label="Dismiss banner">\xD7</button></div>
-<div id="hint"></div>
-`;
-
-  // src/ui/snapshot.js
-  var ASSET_REF_RE = /asset:([a-z0-9][a-z0-9_-]*\.(?:png|jpe?g|gif|webp|svg))/gi;
-  var snapshotHooks = {
-    fetchAssetData: null,
-    getFrozenClientSource: null,
-    getDompurifySource: null
-  };
-  function escapeHtml(str) {
-    return String(str != null ? str : "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-  }
-  function serializeForInlineScript(value) {
-    return JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
-  }
-  function snapshotViewState() {
-    var cur = nodes[currentNodeId];
-    var scroll = mode === "reader" ? readerMain.scrollTop : cur && cur._scrollTop || 0;
-    return {
-      mode,
-      node_id: currentNodeId,
-      scroll,
-      view: { x: view.x, y: view.y, scale: view.scale }
-    };
-  }
-  function serializeSnapshotNodes() {
-    return Object.keys(nodes).map(function(id) {
-      var n = nodes[id];
-      return {
-        id: n.id,
-        parent_id: n.parent_id || null,
-        title: n.title || "",
-        markdown: n.md || "",
-        base_url: n.base_url || null,
-        base_url_source: n.base_url_source || null,
-        origin: n.origin || null,
-        position: { x: n.x || 0, y: n.y || 0 },
-        size: { w: n.w, h: n.h },
-        font_scale: n.font_scale || 1,
-        collapsed: !!n.collapsed,
-        status: n.status || "answered",
-        read: !!n.read
-      };
-    });
-  }
-  function collectAssetNames(snapshotNodes) {
-    var names = {};
-    snapshotNodes.forEach(function(node) {
-      var source2 = String(node.markdown || "");
-      var match;
-      ASSET_REF_RE.lastIndex = 0;
-      while (match = ASSET_REF_RE.exec(source2)) names[match[1]] = true;
-    });
-    return Object.keys(names).sort();
-  }
-  function blobToDataUrl(blob) {
-    return new Promise(function(resolve) {
-      var reader = new FileReader();
-      reader.onload = function() {
-        resolve(String(reader.result || "data:,"));
-      };
-      reader.onerror = function() {
-        resolve("data:,");
-      };
-      reader.readAsDataURL(blob);
-    });
-  }
-  async function fetchAssetData(name) {
-    if (typeof snapshotHooks.fetchAssetData === "function") {
-      try {
-        var hooked = await snapshotHooks.fetchAssetData(name);
-        if (hooked) return hooked;
-      } catch (e) {
-      }
-    }
-    try {
-      var slash = String.fromCharCode(47);
-      var res = await fetch(slash + "assets" + slash + name, { cache: "no-store" });
-      if (!res.ok) return "data:,";
-      return await blobToDataUrl(await res.blob());
-    } catch (e) {
-      return "data:,";
-    }
-  }
-  async function buildAssetData(snapshotNodes) {
-    var out = {};
-    var names = collectAssetNames(snapshotNodes);
-    for (var i2 = 0; i2 < names.length; i2++) out[names[i2]] = await fetchAssetData(names[i2]);
-    return out;
-  }
-  function extractDompurifySource() {
-    if (typeof snapshotHooks.getDompurifySource === "function") {
-      return snapshotHooks.getDompurifySource() || "";
-    }
-    var script2 = document.scripts && document.scripts[0] ? document.scripts[0].textContent || "" : "";
-    var marker = "\n(function(){";
-    var idx = script2.indexOf(marker);
-    return idx === -1 ? "" : script2.slice(0, idx);
-  }
-  async function buildSnapshotHydration() {
-    var snapshotNodes = serializeSnapshotNodes();
-    return {
-      session_id: hydration.session_id || null,
-      hole_id: hydration.hole_id || null,
-      title: hydration.title || "Rabbithole",
-      root_id: rootId,
-      last_event_id: 0,
-      agent_attached: false,
-      view_state: snapshotViewState(),
-      frozen: true,
-      asset_data: await buildAssetData(snapshotNodes),
-      nodes: snapshotNodes
-    };
-  }
-  function buildSnapshotHtml(snapshotHydration) {
-    var _a2;
-    var title = snapshotHydration && snapshotHydration.title || "Rabbithole";
-    var styleText = ((_a2 = document.querySelector("style")) == null ? void 0 : _a2.textContent) || "";
-    var dompurifySource = extractDompurifySource();
-    var frozenClient = typeof snapshotHooks.getFrozenClientSource === "function" ? snapshotHooks.getFrozenClientSource() : window.__RABBITHOLE_FROZEN_CLIENT__;
-    if (!frozenClient) throw new Error("Frozen client bundle is unavailable");
-    var lt = String.fromCharCode(60);
-    var gt = String.fromCharCode(62);
-    var scriptOpen = lt + "script" + gt;
-    var scriptClose = lt + String.fromCharCode(47) + "script" + gt;
-    return '<!DOCTYPE html>\n<html lang="en" data-theme="light">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>' + escapeHtml(title) + "</title>\n<style>\n" + styleText + "\n</style>\n</head>\n<body>\n" + CANVAS_SHELL + "\n" + scriptOpen + "\n" + dompurifySource + '\n(function(){\n  "use strict";\n  var hydration = ' + serializeForInlineScript(snapshotHydration) + ";\n" + frozenClient + "\n  RabbitholeFrozenClient.startRabbithole(hydration);\n})();\n" + scriptClose + "\n</body>\n</html>";
-  }
-  function exportFilename(title) {
-    var slug = String(title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
-    return "rabbithole-" + (slug || "export") + ".html";
-  }
-  function exportJsonFilename(title) {
-    var slug = String(title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
-    return "rabbithole-" + (slug || "export") + ".json";
-  }
-  function buildSnapshotJson(snapshotHydration) {
-    return {
-      format: "rabbithole-session-json",
-      format_version: 1,
-      exported_at: (/* @__PURE__ */ new Date()).toISOString(),
-      session: snapshotHydration
-    };
-  }
-  async function downloadSnapshot() {
-    var snapshotHydration = await buildSnapshotHydration();
-    var html2 = buildSnapshotHtml(snapshotHydration);
-    var blob = new Blob([html2], { type: "text/html;charset=utf-8" });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement("a");
-    a.href = url;
-    a.download = exportFilename(snapshotHydration.title);
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(function() {
-      URL.revokeObjectURL(url);
-    }, 3e4);
-    return html2;
-  }
-  async function downloadSnapshotJson() {
-    var snapshotHydration = await buildSnapshotHydration();
-    var payload = buildSnapshotJson(snapshotHydration);
-    var json2 = JSON.stringify(payload, null, 2) + "\n";
-    var blob = new Blob([json2], { type: "application/json;charset=utf-8" });
-    var url = URL.createObjectURL(blob);
-    var a = document.createElement("a");
-    a.href = url;
-    a.download = exportJsonFilename(snapshotHydration.title);
-    document.body.appendChild(a);
-    a.click();
-    document.body.removeChild(a);
-    setTimeout(function() {
-      URL.revokeObjectURL(url);
-    }, 3e4);
-    return payload;
-  }
-
-  // src/ui/branch-surfaces.js
-  var branchHooks = {
-    post: function() {
-      return Promise.resolve({ ok: true });
-    },
-    exportPortable: null
-  };
-  function registerBranchHooks(hooks) {
-    Object.assign(branchHooks, hooks || {});
-  }
-  var peekTimer = 0;
-  var peekFor = null;
-  function initBranchSurfaces() {
-    readerMain.addEventListener("mouseover", onReaderMarkMouseover);
-    readerMain.addEventListener("mouseout", onReaderMarkMouseout);
-    peekEl.addEventListener("mouseleave", function() {
-      hidePeek();
-    });
-    peekEl.addEventListener("click", function() {
-      var kid = peekFor && nodes[peekFor];
-      hidePeek();
-      if (kid) openNode(kid.id);
-    });
-    document.getElementById("r-share").addEventListener("click", function(e) {
-      e.stopPropagation();
-      toggleShare(e.currentTarget);
-    });
-    document.getElementById("t-share").addEventListener("click", function(e) {
-      e.stopPropagation();
-      toggleShare(e.currentTarget);
-    });
-    document.getElementById("t-synth-prompt").addEventListener("click", function(e) {
-      openSynthesisPrompt(motionSourceFromEvent(e));
-    });
-    document.getElementById("synth-send").addEventListener("click", function(e) {
-      submitSelectedSynthesis(motionSourceFromEvent(e));
-    });
-    document.getElementById("synth-cancel").addEventListener("click", closeSynthesisPrompt);
-    document.getElementById("synth-close").addEventListener("click", closeSynthesisPrompt);
-    document.getElementById("synth-text").addEventListener("input", updateSynthesisPromptState);
-    document.getElementById("synth-mode").addEventListener("change", updateSynthesisModeCopy);
-    document.getElementById("synth-text").addEventListener("keydown", function(e) {
-      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
-        e.preventDefault();
-        submitSelectedSynthesis("keyboard");
-      } else if (e.key === "Escape") {
-        closeSynthesisPrompt();
-      }
-    });
-    document.addEventListener("rh-selection-change", updateSelectedSynthesisUi);
-    document.getElementById("sm-doc").addEventListener("click", onCopyDoc);
-    document.getElementById("sm-trail").addEventListener("click", onCopyTrail);
-    document.getElementById("sm-export").addEventListener("click", onExportSnapshot);
-    document.getElementById("sm-json").addEventListener("click", onExportSnapshotJson);
-    document.getElementById("sm-portable").addEventListener("click", onExportPortable);
-    document.getElementById("sm-synth-selected").addEventListener("click", function(e) {
-      closeShare();
-      openSynthesisPrompt(motionSourceFromEvent(e));
-    });
-    document.getElementById("sm-synth").addEventListener("click", function(e) {
-      closeShare();
-      synthesize(motionSourceFromEvent(e));
-    });
-    document.getElementById("cf-keep").addEventListener("click", hideConfirm);
-    document.getElementById("cf-remove").addEventListener("click", function() {
-      var node = confirmFor && nodes[confirmFor];
-      hideConfirm();
-      if (node) deleteBranch(node);
-    });
-    updateSelectedSynthesisUi();
-  }
-  function hidePeek() {
-    if (peekTimer) {
-      clearTimeout(peekTimer);
-      peekTimer = 0;
-    }
-    peekFor = null;
-    peekEl.classList.remove("visible");
-  }
-  function showPeek(mark) {
-    var kid = nodes[mark.dataset.child];
-    if (!kid || kid.status !== "answered") return;
-    peekFor = kid.id;
-    var badge = kid.origin && kid.origin.synthesis ? '<span class="lens-badge">\u2726 ' + (kid.origin.synthesis_mode === "question_map" ? "Question Map" : "Synthesis") + "</span>" : kid.origin && kid.origin.lens ? lensBadgeHtml(kid.origin.lens) : "";
-    peekEl.innerHTML = '<div class="peek-title">' + (isUnread(kid) ? '<span class="pal-dot"></span>' : "") + "<span>" + esc(kid.title || "Untitled") + "</span>" + badge + '</div><div class="peek-body md">' + (kid.html || "") + '</div><div class="peek-hint">Click to open</div>';
-    if (typeof mountVisuals === "function") {
-      var peekBody = peekEl.querySelector(".peek-body");
-      if (peekBody) mountVisuals(peekBody, "peek:" + kid.id);
-    }
-    var r2 = mark.getBoundingClientRect();
-    var top = r2.bottom + 8;
-    if (top + peekEl.offsetHeight + 10 > window.innerHeight) top = Math.max(10, r2.top - peekEl.offsetHeight - 8);
-    peekEl.style.left = Math.min(window.innerWidth - 360, Math.max(10, r2.left)) + "px";
-    peekEl.style.top = top + "px";
-    peekEl.classList.add("visible");
-    setSurfaceOrigin(peekEl, r2);
-  }
-  function onReaderMarkMouseover(e) {
-    var m = e.target.closest && e.target.closest("mark[data-child]");
-    if (!m) return;
-    var kid = nodes[m.dataset.child];
-    if (!kid || kid.status !== "answered") return;
-    if (peekTimer) clearTimeout(peekTimer);
-    peekTimer = setTimeout(function() {
-      peekTimer = 0;
-      showPeek(m);
-    }, 220);
-  }
-  function onReaderMarkMouseout(e) {
-    var m = e.target.closest && e.target.closest("mark[data-child]");
-    if (!m) return;
-    if (peekTimer) {
-      clearTimeout(peekTimer);
-      peekTimer = 0;
-    }
-    setTimeout(function() {
-      if (!peekEl.matches(":hover") && !readerMain.querySelector("mark[data-child]:hover")) hidePeek();
-    }, 80);
-  }
-  var shareOpen = false;
-  var shareTrap = null;
-  function toggleShare(anchor) {
-    if (shareOpen) {
-      closeShare();
-      return;
-    }
-    var noAgent = frozen || closed;
-    document.getElementById("sm-export").style.display = frozen ? "none" : "";
-    document.getElementById("sm-json").style.display = frozen ? "none" : "";
-    document.getElementById("sm-portable").style.display = !frozen && typeof branchHooks.exportPortable === "function" ? "" : "none";
-    var selected = selectedCanvasNodes();
-    document.getElementById("sm-sep2").style.display = noAgent ? "none" : "";
-    document.getElementById("sm-synth-selected").style.display = noAgent ? "none" : "";
-    document.getElementById("sm-synth-selected").disabled = selected.length < 2;
-    document.getElementById("sm-synth-selected").querySelector(".sm-ic").textContent = selected.length >= 2 ? String(selected.length) : "\u25EB";
-    document.getElementById("sm-synth").style.display = noAgent ? "none" : "";
-    var r2 = anchor.getBoundingClientRect();
-    shareMenu.style.left = Math.min(window.innerWidth - shareMenu.offsetWidth - 10, Math.max(10, r2.right - shareMenu.offsetWidth)) + "px";
-    shareMenu.style.top = r2.bottom + 8 + "px";
-    shareOpen = true;
-    shareMenu.classList.add("visible");
-    setSurfaceOrigin(shareMenu, r2);
-    if (shareTrap) shareTrap();
-    shareTrap = activateFocusTrap(shareMenu, {
-      initialFocus: shareMenu.querySelector("button"),
-      onEscape: closeShare
-    });
-  }
-  function closeShare() {
-    shareOpen = false;
-    shareMenu.classList.remove("visible");
-    if (shareTrap) {
-      shareTrap();
-      shareTrap = null;
-    }
-  }
-  function copyText(text2, okMsg) {
-    function done() {
-      flashHint(okMsg);
-    }
-    function legacy() {
-      var ta = document.createElement("textarea");
-      ta.value = text2;
-      ta.style.position = "fixed";
-      ta.style.opacity = "0";
-      document.body.appendChild(ta);
-      ta.select();
-      try {
-        document.execCommand("copy");
-      } catch (err) {
-      }
-      document.body.removeChild(ta);
-    }
-    if (navigator.clipboard && navigator.clipboard.writeText) {
-      navigator.clipboard.writeText(text2).then(done, function() {
-        legacy();
-        done();
-      });
-    } else {
-      legacy();
-      done();
-    }
-  }
-  function originLine(n) {
-    if (!n.origin) return "";
-    if (n.origin.synthesis) return n.origin.synthesis_mode === "question_map" ? "> \u2726 Question Map from selected nodes\n\n" : "> \u2726 Synthesis from selected nodes\n\n";
-    var ask2 = n.origin.lens ? lensLabel2(n.origin.lens) : n.origin.question || "";
-    if (n.origin.selected_text) return "> Asked about: \u201C" + n.origin.selected_text + "\u201D" + (ask2 ? " \u2014 " + ask2 : "") + "\n\n";
-    return ask2 ? "> Follow-up \u2014 " + ask2 + "\n\n" : "";
-  }
-  function docMarkdown(n, depth) {
-    var h = "#";
-    for (var i2 = 0; i2 < Math.min(depth, 3); i2++) h += "#";
-    var body2 = (n.md || "").trim() || "_(still being written)_";
-    return h + " " + (n.title || "Untitled") + "\n\n" + originLine(n) + body2 + "\n";
-  }
-  function trailMarkdown(id) {
-    var path2 = lineageNodes(id), parts = [];
-    for (var i2 = 0; i2 < path2.length; i2++) parts.push(docMarkdown(path2[i2], i2));
-    return parts.join("\n---\n\n");
-  }
-  function onCopyDoc() {
-    closeShare();
-    var n = nodes[currentNodeId];
-    if (!n) return;
-    copyText(docMarkdown(n, 0), "Copied \u201C" + truncate2(n.title || "Untitled", 40) + "\u201D as Markdown");
-  }
-  function onCopyTrail() {
-    closeShare();
-    var path2 = lineageNodes(currentNodeId);
-    copyText(trailMarkdown(currentNodeId), path2.length === 1 ? "Copied this document as Markdown" : "Copied the trail \u2014 " + path2.length + " documents");
-  }
-  function onExportSnapshot() {
-    closeShare();
-    flashHint("Preparing snapshot...");
-    downloadSnapshot().then(function() {
-      flashHint("Snapshot downloading \u2014 a single file that opens anywhere.");
-    }, function() {
-      flashHint("Couldn't prepare the snapshot.");
-    });
-  }
-  function onExportSnapshotJson() {
-    closeShare();
-    flashHint("Preparing session JSON...");
-    downloadSnapshotJson().then(function() {
-      flashHint("Session JSON downloading.");
-    }, function() {
-      flashHint("Couldn't prepare the session JSON.");
-    });
-  }
-  function onExportPortable() {
-    closeShare();
-    if (typeof branchHooks.exportPortable !== "function") {
-      flashHint("Rabbithole export is only available in the web app.");
-      return;
-    }
-    flashHint("Preparing Rabbithole export...");
-    Promise.resolve().then(function() {
-      return branchHooks.exportPortable();
-    }).then(function(result) {
-      var name = result && result.filename ? " " + result.filename : "";
-      flashHint("Rabbithole export downloading." + name);
-    }, function() {
-      flashHint("Couldn't prepare the Rabbithole export.");
-    });
-  }
-  function synthesize(source2) {
-    if (closed) {
-      flashHint("Session ended \u2014 reopen this Rabbithole from your terminal first.");
-      return;
-    }
-    var root = nodes[rootId];
-    if (!root) return;
-    for (var k in nodes) {
-      var n = nodes[k];
-      if (n.status === "pending" && n.origin && n.origin.synthesis) {
-        flashHint("A synthesis is already being written\u2026");
-        goToNode(n, source2);
-        return;
-      }
-    }
-    var q = "Step back and write the synthesis of this whole Rabbithole so far: the key ideas we explored, how they connect, and the takeaways worth keeping. Make it a standalone summary of the journey.";
-    var kid = sendFollowup(root, q, null, true);
-    if (mode === "canvas") revealNode(kid, source2);
-    flashHint("\u2726 Synthesizing this journey \u2014 it will appear as a branch of the root document.");
-  }
-  function hasPendingSynthesis() {
-    for (var k in nodes) {
-      var n = nodes[k];
-      if (n.status === "pending" && n.origin && n.origin.synthesis) return n;
-    }
-    return null;
-  }
-  function updateSelectedSynthesisUi() {
-    var selected = selectedCanvasNodes();
-    var btn = document.getElementById("t-synth-prompt");
-    var count = document.getElementById("t-synth-count");
-    if (count) count.textContent = String(selected.length);
-    if (btn) btn.disabled = closed || selected.length < 2;
-    var panel2 = document.getElementById("synth-panel");
-    if (panel2 && panel2.classList.contains("visible")) {
-      var sc = document.getElementById("synth-count");
-      if (sc) sc.textContent = String(selected.length);
-      updateSynthesisPromptState();
-      if (selected.length < 2) closeSynthesisPrompt();
-    }
-  }
-  function openSynthesisPrompt(source2) {
-    if (closed) {
-      flashHint("Session ended \u2014 reopen this Rabbithole from your terminal first.");
-      return;
-    }
-    var selected = selectedCanvasNodes();
-    if (selected.length < 2) {
-      flashHint("Select at least two nodes on the canvas first.");
-      return;
-    }
-    var pending = hasPendingSynthesis();
-    if (pending) {
-      flashHint("A synthesis is already being written\u2026");
-      goToNode(pending, source2);
-      return;
-    }
-    var panel2 = document.getElementById("synth-panel");
-    var count = document.getElementById("synth-count");
-    var text2 = document.getElementById("synth-text");
-    var modeSelect = document.getElementById("synth-mode");
-    if (count) count.textContent = String(selected.length);
-    if (modeSelect && !modeSelect.value) modeSelect.value = "synthesis";
-    updateSynthesisModeCopy();
-    if (text2 && !text2.value.trim()) text2.value = defaultSynthesisPrompt(synthesisMode());
-    panel2.classList.add("visible");
-    updateSynthesisPromptState();
-    if (text2) text2.focus();
-  }
-  function closeSynthesisPrompt() {
-    var panel2 = document.getElementById("synth-panel");
-    if (panel2) panel2.classList.remove("visible");
-  }
-  function updateSynthesisPromptState() {
-    var selected = selectedCanvasNodes();
-    var text2 = document.getElementById("synth-text");
-    var send = document.getElementById("synth-send");
-    if (send) send.disabled = selected.length < 2 || !text2 || !text2.value.trim();
-  }
-  function synthesisMode() {
-    var modeSelect = document.getElementById("synth-mode");
-    return modeSelect && modeSelect.value === "question_map" ? "question_map" : "synthesis";
-  }
-  function defaultSynthesisPrompt(mode2) {
-    if (mode2 === "question_map") return "Map what these nodes answer, what remains unclear, and which next branches should be opened to close the gaps.";
-    return "Synthesize only these nodes: connect them into one coherent argument, remove repetition, and close with practical next steps.";
-  }
-  function updateSynthesisModeCopy() {
-    var text2 = document.getElementById("synth-text");
-    var mode2 = synthesisMode();
-    if (text2) {
-      text2.placeholder = mode2 === "question_map" ? "What should this question map focus on? e.g. Find gaps, tensions, and next branches for this research direction." : "What should the synthesis focus on? e.g. Turn these nodes into one thesis architecture proposal, keep tradeoffs and next steps.";
-      var value = text2.value.trim();
-      if (!value || value === defaultSynthesisPrompt("synthesis") || value === defaultSynthesisPrompt("question_map")) text2.value = defaultSynthesisPrompt(mode2);
-    }
-    var send = document.getElementById("synth-send");
-    if (send) send.title = mode2 === "question_map" ? "Create question map" : "Create synthesis";
-    updateSynthesisPromptState();
-  }
-  function submitSelectedSynthesis(source2) {
-    var text2 = document.getElementById("synth-text");
-    var prompt = text2 ? text2.value.trim() : "";
-    if (!prompt) {
-      updateSynthesisPromptState();
-      return;
-    }
-    synthesizeSelected(source2, prompt, synthesisMode());
-    closeSynthesisPrompt();
-    if (text2) text2.value = "";
-  }
-  function selectedNodeMarkdown(n, index) {
-    var body2 = (n.md || "").trim();
-    if (body2.length > 8e3) body2 = body2.slice(0, 8e3).trimEnd() + "\n\n[truncated]";
-    return "## Source " + index + ": " + (n.title || "Untitled") + "\n\nNode ID: " + n.id + "\n\n" + (body2 || "_(no markdown content)_");
-  }
-  function selectedSynthesisPosition(selected) {
-    var minY = Infinity, maxY = -Infinity, maxX = -Infinity;
-    for (var i2 = 0; i2 < selected.length; i2++) {
-      var n = selected[i2];
-      minY = Math.min(minY, n.y || 0);
-      maxY = Math.max(maxY, (n.y || 0) + (n.h || DEFAULT_CHILD.h));
-      maxX = Math.max(maxX, (n.x || 0) + (n.w || DEFAULT_CHILD.w));
-    }
-    if (!isFinite(minY) || !isFinite(maxY) || !isFinite(maxX)) return null;
-    return { x: maxX + 90, y: (minY + maxY - DEFAULT_CHILD.h) / 2 };
-  }
-  function questionMapPrompt(prompt, sourceText) {
-    return "Build a Question Map ONLY from the selected Rabbithole nodes below. Do not summarize unrelated nodes.\n\nHuman focus prompt:\n" + prompt + "\n\nOrganize the result into these sections:\n1. Answered questions\n2. Open questions\n3. Gaps or assumptions\n4. Contradictions or tensions\n5. Suggested next branches\n\nFor each suggested next branch, write the exact question to ask, say which selected source node(s) it should branch from, and explain why answering it would improve the map. Keep it actionable so the reader can open the next branches directly.\n\nSelected source nodes:\n\n" + sourceText;
-  }
-  function synthesisPrompt(prompt, sourceText) {
-    return "Synthesize ONLY the selected Rabbithole nodes below. Do not summarize unrelated nodes.\n\nHuman synthesis prompt:\n" + prompt + "\n\nSelected source nodes:\n\n" + sourceText;
-  }
-  function synthesizeSelected(source2, prompt, outputMode) {
-    if (closed) {
-      flashHint("Session ended \u2014 reopen this Rabbithole from your terminal first.");
-      return;
-    }
-    var root = nodes[rootId];
-    if (!root) return;
-    var pending = hasPendingSynthesis();
-    if (pending) {
-      flashHint("A synthesis is already being written\u2026");
-      goToNode(pending, source2);
-      return;
-    }
-    var selected = selectedCanvasNodes();
-    if (selected.length < 2) {
-      flashHint("Select at least two nodes on the canvas first.");
-      return;
-    }
-    var sourceText = selected.map(function(n, i2) {
-      return selectedNodeMarkdown(n, i2 + 1);
-    }).join("\n\n---\n\n");
-    if (sourceText.length > 3e4) sourceText = sourceText.slice(0, 3e4).trimEnd() + "\n\n[remaining selected-node content truncated]";
-    outputMode = outputMode === "question_map" ? "question_map" : "synthesis";
-    var q = outputMode === "question_map" ? questionMapPrompt(prompt, sourceText) : synthesisPrompt(prompt, sourceText);
-    var kid = sendFollowup(root, q, null, true, {
-      title: outputMode === "question_map" ? "Question map" : "Selected synthesis",
-      selectedText: (outputMode === "question_map" ? "Question map" : "Synthesis") + " requested from " + selected.length + " selected nodes.",
-      synthesisMode: outputMode,
-      synthesisSources: selected.map(function(n) {
-        return n.id;
-      }),
-      position: selectedSynthesisPosition(selected)
-    });
-    clearCanvasSelection();
-    if (mode === "canvas") revealNode(kid, source2);
-    flashHint(outputMode === "question_map" ? "\u2726 Mapping questions from " + selected.length + " selected nodes." : "\u2726 Synthesizing " + selected.length + " selected nodes.");
-  }
-  var confirmFor = null;
-  function confirmDelete(node, anchor) {
-    if (closed) {
-      flashHint(frozen ? "This is a read-only snapshot." : "Session ended \u2014 changes can't be saved anymore.");
-      return;
-    }
-    confirmFor = node.id;
-    var subCount = countSubtree(node.id) - 1;
-    document.getElementById("cf-msg").textContent = subCount > 0 ? "Remove this branch and " + subCount + " inside it?" : "Remove this branch?";
-    var r2 = anchor.getBoundingClientRect();
-    confirmEl.style.left = Math.min(window.innerWidth - confirmEl.offsetWidth - 10, Math.max(10, r2.right - confirmEl.offsetWidth)) + "px";
-    confirmEl.style.top = r2.bottom + 8 + "px";
-    confirmEl.classList.add("visible");
-    setSurfaceOrigin(confirmEl, r2);
-  }
-  function hideConfirm() {
-    confirmFor = null;
-    confirmEl.classList.remove("visible");
-  }
-  function countSubtree(id) {
-    var c2 = 1;
-    childrenOf(id).forEach(function(k) {
-      c2 += countSubtree(k.id);
-    });
-    return c2;
-  }
-  function collectSubtree(id, out) {
-    out.push(id);
-    childrenOf(id).forEach(function(k) {
-      collectSubtree(k.id, out);
-    });
-    return out;
-  }
-  function deleteBranch(node) {
-    var title = node.title || "Untitled";
-    var ids = collectSubtree(node.id, []);
-    branchHooks.post({ type: "delete_node", node_id: node.id });
-    removeNodesLocal(ids, node.parent_id);
-    flashHint(ids.length > 1 ? "Removed \u201C" + truncate2(title, 40) + "\u201D and " + (ids.length - 1) + " inside it" : "Removed \u201C" + truncate2(title, 40) + "\u201D");
-  }
-  function removeNodesLocal(ids, parentId) {
-    var currentGone = false;
-    for (var i2 = 0; i2 < ids.length; i2++) {
-      var id = ids[i2], n = nodes[id];
-      if (!n) continue;
-      if (currentNodeId === id) currentGone = true;
-      if (n.el && n.el.parentNode) n.el.parentNode.removeChild(n.el);
-      removeMarks(readerMain, id);
-      removeThreadItem(id);
-      var p = nodes[n.parent_id];
-      if (p && p.bodyEl) removeMarks(p.bodyEl, id);
-      clearEdgeHighlight(id);
-      delete nodes[id];
-    }
-    if (currentGone) {
-      setCurrentNodeId(parentId && nodes[parentId] ? parentId : rootId);
-      if (mode === "reader") openNode(currentNodeId);
-    }
-    if (canvasBuilt) {
-      renderVisibility();
-      drawEdges();
-    }
-    if (mode === "reader") {
-      renderBreadcrumb();
-      renderSidebar();
-    }
-    refreshAmbient();
-    updateSince();
   }
 
   // node_modules/marked/lib/marked.esm.js
@@ -11277,7 +8378,7 @@ ${text2}</tr>
   var inner = "inner";
   var mathord = "mathord";
   var op = "op-token";
-  var open2 = "open";
+  var open = "open";
   var punct = "punct";
   var rel = "rel";
   var spacing = "spacing";
@@ -11341,9 +8442,9 @@ ${text2}</tr>
   defineSymbol(text, main, textord, "\u2021", "\\ddag");
   defineSymbol(text, main, textord, "\u2021", "\\textdaggerdbl");
   defineSymbol(math, main, close, "\u23B1", "\\rmoustache", true);
-  defineSymbol(math, main, open2, "\u23B0", "\\lmoustache", true);
+  defineSymbol(math, main, open, "\u23B0", "\\lmoustache", true);
   defineSymbol(math, main, close, "\u27EF", "\\rgroup", true);
-  defineSymbol(math, main, open2, "\u27EE", "\\lgroup", true);
+  defineSymbol(math, main, open, "\u27EE", "\\lgroup", true);
   defineSymbol(math, main, bin, "\u2213", "\\mp", true);
   defineSymbol(math, main, bin, "\u2296", "\\ominus", true);
   defineSymbol(math, main, bin, "\u228E", "\\uplus", true);
@@ -11473,9 +8574,9 @@ ${text2}</tr>
   defineSymbol(math, ams, textord, "\u2137", "\\gimel", true);
   defineSymbol(math, ams, textord, "\u03DD", "\\digamma", true);
   defineSymbol(math, ams, textord, "\u03F0", "\\varkappa");
-  defineSymbol(math, ams, open2, "\u250C", "\\@ulcorner", true);
+  defineSymbol(math, ams, open, "\u250C", "\\@ulcorner", true);
   defineSymbol(math, ams, close, "\u2510", "\\@urcorner", true);
-  defineSymbol(math, ams, open2, "\u2514", "\\@llcorner", true);
+  defineSymbol(math, ams, open, "\u2514", "\\@llcorner", true);
   defineSymbol(math, ams, close, "\u2518", "\\@lrcorner", true);
   defineSymbol(math, ams, rel, "\u2266", "\\leqq", true);
   defineSymbol(math, ams, rel, "\u2A7D", "\\leqslant", true);
@@ -11694,9 +8795,9 @@ ${text2}</tr>
   defineSymbol(math, main, bin, "\u2227", "\\wedge", true);
   defineSymbol(math, main, bin, "\u2228", "\\vee", true);
   defineSymbol(math, main, textord, "\u221A", "\\surd");
-  defineSymbol(math, main, open2, "\u27E8", "\\langle", true);
-  defineSymbol(math, main, open2, "\u2223", "\\lvert");
-  defineSymbol(math, main, open2, "\u2225", "\\lVert");
+  defineSymbol(math, main, open, "\u27E8", "\\langle", true);
+  defineSymbol(math, main, open, "\u2223", "\\lvert");
+  defineSymbol(math, main, open, "\u2225", "\\lVert");
   defineSymbol(math, main, close, "?", "?");
   defineSymbol(math, main, close, "!", "!");
   defineSymbol(math, main, close, "\u27E9", "\\rangle", true);
@@ -11754,25 +8855,25 @@ ${text2}</tr>
   defineSymbol(math, main, bin, "\u22C6", "\\star");
   defineSymbol(math, main, bin, "\u25C3", "\\triangleleft");
   defineSymbol(math, main, bin, "\u25B9", "\\triangleright");
-  defineSymbol(math, main, open2, "{", "\\{");
+  defineSymbol(math, main, open, "{", "\\{");
   defineSymbol(text, main, textord, "{", "\\{");
   defineSymbol(text, main, textord, "{", "\\textbraceleft");
   defineSymbol(math, main, close, "}", "\\}");
   defineSymbol(text, main, textord, "}", "\\}");
   defineSymbol(text, main, textord, "}", "\\textbraceright");
-  defineSymbol(math, main, open2, "{", "\\lbrace");
+  defineSymbol(math, main, open, "{", "\\lbrace");
   defineSymbol(math, main, close, "}", "\\rbrace");
-  defineSymbol(math, main, open2, "[", "\\lbrack", true);
+  defineSymbol(math, main, open, "[", "\\lbrack", true);
   defineSymbol(text, main, textord, "[", "\\lbrack", true);
   defineSymbol(math, main, close, "]", "\\rbrack", true);
   defineSymbol(text, main, textord, "]", "\\rbrack", true);
-  defineSymbol(math, main, open2, "(", "\\lparen", true);
+  defineSymbol(math, main, open, "(", "\\lparen", true);
   defineSymbol(math, main, close, ")", "\\rparen", true);
   defineSymbol(text, main, textord, "<", "\\textless", true);
   defineSymbol(text, main, textord, ">", "\\textgreater", true);
-  defineSymbol(math, main, open2, "\u230A", "\\lfloor", true);
+  defineSymbol(math, main, open, "\u230A", "\\lfloor", true);
   defineSymbol(math, main, close, "\u230B", "\\rfloor", true);
-  defineSymbol(math, main, open2, "\u2308", "\\lceil", true);
+  defineSymbol(math, main, open, "\u2308", "\\lceil", true);
   defineSymbol(math, main, close, "\u2309", "\\rceil", true);
   defineSymbol(math, main, textord, "\\", "\\backslash");
   defineSymbol(math, main, textord, "\u2223", "|");
@@ -22189,8 +19290,8 @@ ${text2}</tr>
   };
 
   // node_modules/highlight.js/es/core.js
-  var import_core9 = __toESM(require_core(), 1);
-  var core_default = import_core9.default;
+  var import_core2 = __toESM(require_core(), 1);
+  var core_default = import_core2.default;
 
   // node_modules/highlight.js/es/languages/bash.js
   function bash(hljs) {
@@ -31695,7 +28796,7 @@ ${text2}</tr>
   // src/core/utils.js
   var LINE_SEP = new RegExp(String.fromCharCode(8232), "g");
   var PARA_SEP = new RegExp(String.fromCharCode(8233), "g");
-  function escapeHtml2(str) {
+  function escapeHtml(str) {
     return String(str).replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&#39;");
   }
 
@@ -31815,7 +28916,7 @@ ${text2}</tr>
     return -1;
   }
   function mathSourceCode(tex, displayMode) {
-    const code = `<code class="math-source">${escapeHtml2(tex)}</code>`;
+    const code = `<code class="math-source">${escapeHtml(tex)}</code>`;
     return displayMode ? `<p>${code}</p>
 ` : code;
   }
@@ -31842,7 +28943,7 @@ ${text2}</tr>
     return ((_a2 = String(lang || "").match(/\S+/)) == null ? void 0 : _a2[0]) || "";
   }
   function renderPendingVisual(language) {
-    return `<div class="viz viz-pending" data-viz="${escapeHtml2(language)}" aria-label="Drawing visual">Drawing\u2026</div>
+    return `<div class="viz viz-pending" data-viz="${escapeHtml(language)}" aria-label="Drawing visual">Drawing\u2026</div>
 `;
   }
   function findClosingFence(src, marker, from) {
@@ -31861,10 +28962,10 @@ ${text2}</tr>
   function renderPlainCode(source2, language, escaped) {
     const code = source2.replace(TRAILING_NEWLINE, "") + "\n";
     if (!language) {
-      return `<pre><code>${escaped ? code : escapeHtml2(code)}</code></pre>
+      return `<pre><code>${escaped ? code : escapeHtml(code)}</code></pre>
 `;
     }
-    return `<pre><code class="language-${escapeHtml2(language)}">${escaped ? code : escapeHtml2(code)}</code></pre>
+    return `<pre><code class="language-${escapeHtml(language)}">${escaped ? code : escapeHtml(code)}</code></pre>
 `;
   }
   function sanitizeUrl(href, allow) {
@@ -31885,7 +28986,7 @@ ${text2}</tr>
     }
     function renderVisualPlaceholder(language, source2) {
       const encoded = encodeBase64(String(source2 != null ? source2 : ""));
-      return `<div class="viz" data-viz="${escapeHtml2(language)}" data-src="${encoded}"></div>
+      return `<div class="viz" data-viz="${escapeHtml(language)}" data-src="${encoded}"></div>
 `;
     }
     function renderRegisteredFence(language, source2) {
@@ -31900,7 +29001,7 @@ ${text2}</tr>
       if (!language || !core_default.getLanguage(hljsLanguage)) return renderPlainCode(text2, language, escaped);
       const source2 = text2.replace(TRAILING_NEWLINE, "");
       const highlighted = core_default.highlight(source2, { language: hljsLanguage, ignoreIllegals: true }).value + "\n";
-      return `<pre><code class="language-${escapeHtml2(language)} hljs">${highlighted}</code></pre>
+      return `<pre><code class="language-${escapeHtml(language)} hljs">${highlighted}</code></pre>
 `;
     }
     function buildExtensions() {
@@ -32002,16 +29103,16 @@ ${text2}</tr>
           return renderCodeFence(token);
         },
         html({ text: text2 }) {
-          return escapeHtml2(text2);
+          return escapeHtml(text2);
         },
         link({ href, title, tokens }) {
           const text2 = this.parser.parseInline(tokens);
           const resolved = resolveMarkdownUrl(href, { baseUrl: context.baseUrl });
           const safe = sanitizeUrl(resolved, SAFE_URL);
           if (safe === null) return text2;
-          const titleAttr = title ? ` title="${escapeHtml2(title)}"` : "";
+          const titleAttr = title ? ` title="${escapeHtml(title)}"` : "";
           const target = safe.startsWith("#") ? "" : ` target="_blank"`;
-          return `<a href="${escapeHtml2(safe)}"${titleAttr}${target} rel="noopener noreferrer">${text2}</a>`;
+          return `<a href="${escapeHtml(safe)}"${titleAttr}${target} rel="noopener noreferrer">${text2}</a>`;
         },
         image({ href, title, text: text2 }) {
           const resolved = resolveMarkdownUrl(href, {
@@ -32021,9 +29122,9 @@ ${text2}</tr>
             resolveAssetUrl: context.resolveAssetUrl
           });
           const safe = sanitizeUrl(resolved, SAFE_IMG);
-          if (safe === null) return escapeHtml2(text2 || "");
-          const titleAttr = title ? ` title="${escapeHtml2(title)}"` : "";
-          return `<img src="${escapeHtml2(safe)}" alt="${escapeHtml2(text2 || "")}"${titleAttr}>`;
+          if (safe === null) return escapeHtml(text2 || "");
+          const titleAttr = title ? ` title="${escapeHtml(title)}"` : "";
+          return `<img src="${escapeHtml(safe)}" alt="${escapeHtml(text2 || "")}"${titleAttr}>`;
         }
       };
     }
@@ -32094,6 +29195,3030 @@ ${text2}</tr>
   }
   if (typeof window !== "undefined") {
     window.__rhMarkdownRendererSentinel = MARKDOWN_RENDERER_SENTINEL;
+  }
+
+  // src/ui/canvas-view.js
+  var canvasHooks = {
+    hideAsk: function() {
+    },
+    hidePeek: function() {
+    },
+    sendFollowup: function() {
+      return null;
+    },
+    submitCardNotes: function() {
+      return null;
+    },
+    post: function() {
+      return Promise.resolve({ ok: true });
+    },
+    confirmDelete: function() {
+    },
+    persistNode: function() {
+    },
+    persistNodesBulk: function() {
+    },
+    scheduleViewSave: function() {
+    },
+    onSelectionChange: function() {
+    }
+  };
+  var selectedNodeIds = {};
+  function registerCanvasHooks(hooks) {
+    Object.assign(canvasHooks, hooks || {});
+  }
+  function selectedCanvasNodes() {
+    var out = [];
+    for (var id in selectedNodeIds) {
+      if (selectedNodeIds[id] && nodes[id] && nodes[id].status !== "pending") out.push(nodes[id]);
+    }
+    out.sort(nodeOrder2);
+    return out;
+  }
+  function clearCanvasSelection() {
+    for (var id in selectedNodeIds) {
+      if (nodes[id] && nodes[id].el) nodes[id].el.classList.remove("selected");
+      if (nodes[id] && nodes[id].selectBtn) {
+        nodes[id].selectBtn.classList.remove("active");
+        nodes[id].selectBtn.textContent = "\u25A1";
+        nodes[id].selectBtn.setAttribute("aria-pressed", "false");
+      }
+    }
+    selectedNodeIds = {};
+    notifySelectionChange();
+  }
+  function notifySelectionChange() {
+    var count = selectedCanvasNodes().length;
+    canvasHooks.onSelectionChange(count);
+    try {
+      document.dispatchEvent(new CustomEvent("rh-selection-change", { detail: { count } }));
+    } catch (_e) {
+    }
+  }
+  function initCanvasView() {
+    registerCoreHooks({
+      ensureCanvasBuilt,
+      diveToNode,
+      effH
+    });
+    world.addEventListener("mouseover", onWorldMouseOver);
+    world.addEventListener("mouseout", onWorldMouseOut);
+    initViewportPan();
+    viewport.addEventListener("wheel", onViewportWheel, { passive: false });
+    viewport.addEventListener("dblclick", onViewportDblClick);
+    document.getElementById("t-reader").addEventListener("click", function() {
+      openNode(currentNodeId);
+    });
+    document.getElementById("t-frame").addEventListener("click", function(e) {
+      frameAll(true, motionSourceFromEvent(e));
+    });
+    document.getElementById("t-tidy").addEventListener("click", function(e) {
+      tidy(motionSourceFromEvent(e));
+    });
+    document.getElementById("t-zin").addEventListener("click", function() {
+      zoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, 1.15);
+    });
+    document.getElementById("t-zout").addEventListener("click", function() {
+      zoomAt(viewport.clientWidth / 2, viewport.clientHeight / 2, 0.87);
+    });
+    zoomLabel.addEventListener("click", function() {
+      zoomTo(viewport.clientWidth / 2, viewport.clientHeight / 2, 1);
+    });
+    exposeFilmCameraHook();
+  }
+  function applyTransform() {
+    world.style.transform = "translate(" + view.x + "px," + view.y + "px) scale(" + view.scale + ")";
+    zoomLabel.textContent = Math.round(view.scale * 100) + "%";
+    canvasHooks.scheduleViewSave();
+  }
+  function exposeFilmCameraHook() {
+    var enabled = false;
+    try {
+      enabled = localStorage.getItem("rh-film") === "1";
+    } catch (e) {
+    }
+    if (!enabled) return;
+    Object.defineProperty(window, "__rhFilmCamera", {
+      configurable: true,
+      value: {
+        getView: function() {
+          return { x: view.x, y: view.y, scale: view.scale };
+        },
+        setView: function(x, y, scale) {
+          viewAnimId++;
+          view.x = Number(x);
+          view.y = Number(y);
+          view.scale = Math.min(MAX_SCALE, Math.max(MIN_SCALE, Number(scale)));
+          applyTransform();
+          drawEdges();
+          return { x: view.x, y: view.y, scale: view.scale };
+        }
+      }
+    });
+  }
+  function screenToWorld(sx, sy) {
+    return { x: (sx - view.x) / view.scale, y: (sy - view.y) / view.scale };
+  }
+  function zoomAt(sx, sy, factor) {
+    var next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, view.scale * factor));
+    zoomTo(sx, sy, next);
+  }
+  function zoomTo(sx, sy, next) {
+    viewAnimId++;
+    next = Math.min(MAX_SCALE, Math.max(MIN_SCALE, next));
+    if (next === view.scale) return;
+    var w = screenToWorld(sx, sy);
+    view.scale = next;
+    view.x = sx - w.x * view.scale;
+    view.y = sy - w.y * view.scale;
+    applyTransform();
+  }
+  var NODE_EXPAND_ICON = '<svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M9.25 3.75h3v3"/><path d="M12.25 3.75 8.75 7.25"/><path d="M6.75 12.25h-3v-3"/><path d="M3.75 12.25l3.5-3.5"/></svg>';
+  var NODE_COLLAPSE_ICON = '<svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" fill="none" aria-hidden="true"><path d="M3 8h10"/></svg>';
+  var NODE_COPY_ICON = '<svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none" aria-hidden="true"><rect x="5" y="4" width="7" height="9" rx="1.2"/><path d="M4 11.5H3.7c-.7 0-1.2-.5-1.2-1.2V3.7c0-.7.5-1.2 1.2-1.2h5.6c.7 0 1.2.5 1.2 1.2V4"/></svg>';
+  function createNodeEl(node, enter) {
+    var el = document.createElement("div");
+    el.className = "node" + (node.id === rootId ? " root" : "");
+    if (enter && !document.hidden && !shouldReduceMotion()) el.className += " node-enter";
+    el.dataset.id = node.id;
+    var head = document.createElement("div");
+    head.className = "node-head";
+    if (node.id === rootId) {
+      var badge = document.createElement("span");
+      badge.className = "node-badge";
+      badge.textContent = "\u{1F407}";
+      badge.title = "Where this Rabbithole begins";
+      head.appendChild(badge);
+    }
+    var selectBtn = mkBtn("\u25A1", "Select for synthesis");
+    selectBtn.classList.add("node-select");
+    selectBtn.setAttribute("aria-pressed", "false");
+    var titleEl = document.createElement("span");
+    titleEl.className = "node-title";
+    titleEl.textContent = node.title || "\u2026";
+    titleEl.title = node.title || "";
+    var aDown = mkBtn("A\u2212", "Smaller text");
+    var aUp = mkBtn("A+", "Larger text");
+    aDown.classList.add("node-font-btn");
+    aUp.classList.add("node-font-btn");
+    var copyBtn = mkIconBtn(NODE_COPY_ICON, "Copy Markdown");
+    copyBtn.classList.add("node-copy-btn");
+    var collapseBtn = mkIconBtn(NODE_COLLAPSE_ICON, "Collapse");
+    var openBtn = mkIconBtn(NODE_EXPAND_ICON, "Expand");
+    var divider = document.createElement("span");
+    divider.className = "node-act-divider";
+    divider.setAttribute("aria-hidden", "true");
+    var acts = document.createElement("span");
+    acts.className = "node-acts";
+    if (node.id !== rootId) {
+      var delBtn = mkBtn("\u2715", "Remove this branch");
+      delBtn.classList.add("danger");
+      delBtn.addEventListener("click", function(e) {
+        e.stopPropagation();
+        canvasHooks.confirmDelete(node, delBtn);
+      });
+      acts.appendChild(delBtn);
+    }
+    acts.appendChild(aDown);
+    acts.appendChild(aUp);
+    acts.appendChild(divider);
+    if (isNotesBranch(node)) {
+      var editBtn = mkIconBtn('<svg width="14" height="14" viewBox="0 0 16 16" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M11 1.5l3.5 3.5L5 14.5H1.5V11L11 1.5z"/></svg>', "Edit notes");
+      editBtn.addEventListener("click", function(e) {
+        e.stopPropagation();
+        toggleNotesEdit(node);
+      });
+      acts.appendChild(editBtn);
+    }
+    acts.appendChild(collapseBtn);
+    acts.appendChild(copyBtn);
+    acts.appendChild(openBtn);
+    head.appendChild(selectBtn);
+    head.appendChild(titleEl);
+    head.appendChild(acts);
+    var body2 = document.createElement("div");
+    body2.className = "node-body";
+    var comp = buildCardComposer(node);
+    var resize = document.createElement("div");
+    resize.className = "node-resize";
+    el.appendChild(head);
+    el.appendChild(body2);
+    el.appendChild(comp);
+    el.appendChild(resize);
+    world.appendChild(el);
+    node.el = el;
+    node.bodyEl = body2;
+    node.titleEl = titleEl;
+    node.selectBtn = selectBtn;
+    fillBody(node);
+    updateCardComposer(node);
+    if (node.collapsed) el.classList.add("collapsed");
+    if (isUnread(node)) el.classList.add("unread");
+    enableDrag(node, head);
+    enableResize(node, resize);
+    head.addEventListener("dblclick", function() {
+      openNode(node.id);
+    });
+    selectBtn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      toggleNodeSelected(node);
+    });
+    copyBtn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      copyNodeMarkdown(node);
+    });
+    openBtn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      openNode(node.id);
+    });
+    collapseBtn.addEventListener("click", function(e) {
+      e.stopPropagation();
+      toggleCollapse(node, collapseBtn);
+    });
+    aDown.addEventListener("click", function(e) {
+      e.stopPropagation();
+      setNodeFontScale(node, -0.1);
+    });
+    aUp.addEventListener("click", function(e) {
+      e.stopPropagation();
+      setNodeFontScale(node, 0.1);
+    });
+    body2.addEventListener("scroll", scheduleEdges, { passive: true });
+    body2.addEventListener("pointerdown", function() {
+      if (node.status === "answered") markRead(node);
+    });
+    el.addEventListener("mouseenter", function() {
+      focusOrigin(node, true);
+    });
+    el.addEventListener("mouseleave", function() {
+      focusOrigin(node, false);
+      if (node.ncComp && !node.ncText.value.trim() && document.activeElement !== node.ncText) closeCardDrawer(node);
+    });
+    layoutNode(node);
+    if (el.classList.contains("node-enter")) {
+      requestAnimationFrame(function() {
+        el.classList.add("entered");
+        setTimeout(function() {
+          el.classList.remove("node-enter");
+          el.classList.remove("entered");
+        }, 220);
+      });
+    }
+    return node;
+  }
+  function toggleNodeSelected(node) {
+    if (!node || node.status === "pending") return;
+    var on = !selectedNodeIds[node.id];
+    if (on) selectedNodeIds[node.id] = true;
+    else delete selectedNodeIds[node.id];
+    if (node.el) node.el.classList.toggle("selected", on);
+    if (node.selectBtn) {
+      node.selectBtn.classList.toggle("active", on);
+      node.selectBtn.textContent = on ? "\u2713" : "\u25A1";
+      node.selectBtn.setAttribute("aria-pressed", on ? "true" : "false");
+    }
+    flashHint(on ? "Selected for synthesis" : "Removed from synthesis selection");
+    notifySelectionChange();
+  }
+  function diveToNode(node, source2) {
+    var vw = viewport.clientWidth, vh = viewport.clientHeight;
+    var ts = Math.min(1, Math.max(0.75, Math.min((vw - 120) / node.w, (vh - 120) / effH(node))));
+    var tx = vw / 2 - (node.x + node.w / 2) * ts;
+    var ty = vh / 2 - (node.y + effH(node) / 2) * ts;
+    animateView(tx, ty, ts, { source: source2, duration: 270, ease: "inOut" });
+  }
+  function mkBtn(txt, title) {
+    var b = document.createElement("button");
+    b.className = "node-btn";
+    b.textContent = txt;
+    b.title = title;
+    return b;
+  }
+  function mkIconBtn(svg, title) {
+    var b = mkBtn("", title);
+    b.innerHTML = svg;
+    b.setAttribute("aria-label", title);
+    return b;
+  }
+  function copyNodeMarkdown(node) {
+    var title = node.title || "Untitled";
+    var body2 = (node.md || "").trim();
+    var text2 = "# " + title + (body2 ? "\n\n" + body2 : "");
+    function done() {
+      flashHint("Copied \u201C" + title.slice(0, 40) + (title.length > 40 ? "\u2026" : "") + "\u201D as Markdown");
+    }
+    function legacy() {
+      var ta = document.createElement("textarea");
+      ta.value = text2;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch (_err) {
+      }
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text2).then(done, function() {
+        legacy();
+        done();
+      });
+    } else {
+      legacy();
+      done();
+    }
+  }
+  var SEND_ICON = '<svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 12.8V3.6M8 3.6 3.9 7.7M8 3.6l4.1 4.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg>';
+  function autoGrowEl(ta, max) {
+    ta.style.height = "auto";
+    ta.style.height = Math.min(max, ta.scrollHeight) + "px";
+    ta.style.overflowY = ta.scrollHeight > max ? "auto" : "hidden";
+  }
+  function buildCardComposer(node) {
+    var comp = document.createElement("div");
+    comp.className = "node-composer";
+    var clip = document.createElement("div");
+    clip.className = "nc-clip";
+    var inner2 = document.createElement("div");
+    inner2.className = "nc-inner";
+    var ta = document.createElement("textarea");
+    ta.rows = 1;
+    var send = document.createElement("button");
+    send.className = "send-btn";
+    send.title = "Send (\u21B5)";
+    send.setAttribute("aria-label", "Send follow-up");
+    send.innerHTML = SEND_ICON;
+    var handleWrap = document.createElement("div");
+    handleWrap.className = "nc-handle-wrap";
+    var fuHandle = document.createElement("button");
+    fuHandle.type = "button";
+    fuHandle.className = "nc-handle";
+    fuHandle.title = "Ask a follow-up about this document";
+    var plus = document.createElement("span");
+    plus.className = "nc-plus";
+    plus.textContent = "+";
+    fuHandle.appendChild(plus);
+    fuHandle.appendChild(document.createTextNode(" Follow-up"));
+    var notesHandle = document.createElement("button");
+    notesHandle.type = "button";
+    notesHandle.className = "nc-notes-handle";
+    notesHandle.title = "Add a notes block";
+    notesHandle.textContent = "\u{1F4DD} Notes";
+    handleWrap.appendChild(fuHandle);
+    handleWrap.appendChild(notesHandle);
+    inner2.appendChild(ta);
+    inner2.appendChild(send);
+    clip.appendChild(inner2);
+    comp.appendChild(clip);
+    comp.appendChild(handleWrap);
+    node.ncComp = comp;
+    node.ncInner = inner2;
+    node.ncText = ta;
+    node.ncSend = send;
+    fuHandle.addEventListener("click", function(e) {
+      e.stopPropagation();
+      openCardDrawer(node);
+    });
+    notesHandle.addEventListener("click", function(e) {
+      e.stopPropagation();
+      submitCardNotes(node, motionSourceFromEvent(e));
+    });
+    ta.addEventListener("input", function() {
+      autoGrowEl(ta, 90);
+      updateCardComposer(node);
+    });
+    ta.addEventListener("keydown", function(e) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        submitCardFollowup(node, "keyboard");
+      } else if (e.key === "Escape") {
+        e.stopPropagation();
+        closeCardDrawer(node);
+        ta.blur();
+      }
+    });
+    ta.addEventListener("blur", function() {
+      if (!ta.value.trim() && !(node.el && node.el.matches(":hover"))) closeCardDrawer(node);
+    });
+    send.addEventListener("click", function(e) {
+      e.stopPropagation();
+      submitCardFollowup(node, motionSourceFromEvent(e));
+    });
+    return comp;
+  }
+  function openCardDrawer(node) {
+    node.ncComp.classList.add("open");
+    node.ncText.focus({ preventScroll: true });
+  }
+  function closeCardDrawer(node) {
+    node.ncComp.classList.remove("open");
+  }
+  function updateCardComposer(node) {
+    if (!node.ncText) return;
+    var down = closed || node.status === "pending";
+    node.ncText.disabled = down;
+    node.ncInner.classList.toggle("disabled", down);
+    node.ncComp.classList.toggle("nc-draft", !!node.ncText.value.trim());
+    if (frozen) node.ncText.placeholder = "Read-only snapshot";
+    else if (closed) node.ncText.placeholder = "Session ended \u2014 saved";
+    else if (node.status === "pending") node.ncText.placeholder = "Still being written\u2026";
+    else if (connLost || !agentAttached) node.ncText.placeholder = "Asks are saved for the agent\u2026";
+    else node.ncText.placeholder = "Ask a follow-up\u2026";
+    node.ncSend.disabled = down || !node.ncText.value.trim();
+  }
+  function submitCardFollowup(node, source2) {
+    if (closed) {
+      flashHint("Session ended \u2014 reopen this Rabbithole from your terminal to continue.");
+      return;
+    }
+    if (node.status === "pending") return;
+    var question = node.ncText.value.trim();
+    if (!question) return;
+    var kid = canvasHooks.sendFollowup(node, question, null);
+    node.ncText.value = "";
+    autoGrowEl(node.ncText, 90);
+    closeCardDrawer(node);
+    updateCardComposer(node);
+    revealNode(kid, source2);
+  }
+  function submitCardNotes(node, source2) {
+    if (closed) {
+      flashHint("Session ended \u2014 reopen this Rabbithole from your terminal to continue.");
+      return;
+    }
+    if (node.status === "pending") return;
+    var kid = canvasHooks.submitCardNotes(node);
+    if (kid) revealNode(kid, source2);
+  }
+  function revealNode(n, source2) {
+    if (mode !== "canvas" || !n) return;
+    var pad2 = 30, vw = viewport.clientWidth, vh = viewport.clientHeight;
+    var x1 = n.x * view.scale + view.x, y1 = n.y * view.scale + view.y;
+    var x2 = (n.x + n.w) * view.scale + view.x, y2 = (n.y + n.h) * view.scale + view.y;
+    var dx = 0, dy = 0;
+    if (x2 > vw - pad2) dx = vw - pad2 - x2;
+    if (x1 + dx < pad2) dx = pad2 - x1;
+    if (y2 > vh - pad2) dy = vh - pad2 - y2;
+    if (y1 + dy < pad2) dy = pad2 - y1;
+    if (!dx && !dy) return;
+    animatePan(view.x + dx, view.y + dy, source2, 230, "out");
+  }
+  function animatePan(tx, ty, source2, duration, ease) {
+    animateView(tx, ty, view.scale, { source: source2, duration, ease });
+  }
+  var viewAnimId = 0;
+  function animateView(tx, ty, ts, opts) {
+    opts = opts || {};
+    var myId = ++viewAnimId;
+    if (document.hidden || shouldReduceMotion() || opts.source !== "pointer") {
+      view.x = tx;
+      view.y = ty;
+      view.scale = ts;
+      applyTransform();
+      return;
+    }
+    var sx = view.x, sy = view.y, ss = view.scale, t0 = performance.now(), D2 = opts.duration || 270;
+    var easeFn = opts.ease === "inOut" ? easeInOutMotion : easeOutMotion;
+    function step(t) {
+      if (myId !== viewAnimId) return;
+      var p = Math.min(1, (t - t0) / D2), k = easeFn(p);
+      view.x = sx + (tx - sx) * k;
+      view.y = sy + (ty - sy) * k;
+      view.scale = ss + (ts - ss) * k;
+      applyTransform();
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  function fillBody(node) {
+    var body2 = node.bodyEl;
+    if (!body2) return;
+    body2.innerHTML = "";
+    if (isNotesBranch(node)) {
+      var nb = document.createElement("div");
+      nb.className = "notes-badge";
+      nb.textContent = "\u{1F4DD} Notes";
+      body2.appendChild(nb);
+      var dc = buildDocContent(node, CANVAS_BASE);
+      dc.classList.add("notes-content");
+      if (!node.markdown) dc.classList.add("notes-empty");
+      body2.appendChild(dc);
+      applyChildHighlights(dc, node);
+      return;
+    }
+    if (node.origin && node.origin.synthesis) {
+      var sq = document.createElement("div");
+      sq.className = "origin-quote";
+      sq.textContent = node.origin.synthesis_mode === "question_map" ? "\u2726 Question Map from selected nodes" : "\u2726 Synthesis from selected nodes";
+      body2.appendChild(sq);
+    } else if (node.origin && node.origin.selected_text) {
+      var q = document.createElement("div");
+      q.className = "origin-quote";
+      q.textContent = "\u201C" + node.origin.selected_text + "\u201D";
+      body2.appendChild(q);
+    } else if (node.origin && (node.origin.question || node.origin.lens)) {
+      var fq = document.createElement("div");
+      fq.className = "origin-quote";
+      fq.textContent = node.origin.lens ? "Follow-up \u2014 " + lensLabel2(node.origin.lens) : node.origin.question;
+      body2.appendChild(fq);
+    }
+    var dc = buildDocContent(node, CANVAS_BASE);
+    body2.appendChild(dc);
+    applyChildHighlights(dc, node);
+  }
+  function saveNotesContent(node) {
+    if (!node.notesTa) return;
+    var md = node.notesTa.value;
+    node.md = md;
+    node.markdown = md;
+    refreshNodeHtml(node);
+    node.title = md.split("\n")[0].replace(/^#\s*/, "").slice(0, 48) || "Notes";
+    if (node.titleEl) node.titleEl.textContent = node.title;
+    canvasHooks.post({ type: "node_update", node_id: node.id, markdown: md, html: node.html, title: node.title });
+  }
+  function toggleNotesEdit(node) {
+    if (!node.bodyEl) return;
+    if (node.notesEditing) {
+      saveNotesContent(node);
+      node.notesEditing = false;
+      fillBody(node);
+      updateCardComposer(node);
+      return;
+    }
+    node.notesEditing = true;
+    var body2 = node.bodyEl;
+    body2.innerHTML = "";
+    var nb = document.createElement("div");
+    nb.className = "notes-badge";
+    nb.textContent = "\u{1F4DD} Notes";
+    body2.appendChild(nb);
+    var ta = document.createElement("textarea");
+    ta.className = "notes-textarea";
+    ta.rows = 3;
+    ta.value = node.md || node.markdown || "";
+    ta.placeholder = "Write your notes here\u2026 (markdown supported)";
+    body2.appendChild(ta);
+    node.notesTa = ta;
+    ta.focus({ preventScroll: true });
+    autoGrowEl(ta, 600);
+    ta.addEventListener("input", function() {
+      autoGrowEl(ta, 400);
+    });
+    ta.addEventListener("blur", function() {
+      toggleNotesEdit(node);
+    });
+    ta.addEventListener("keydown", function(e) {
+      if (e.key === "Escape") {
+        e.preventDefault();
+        toggleNotesEdit(node);
+      }
+    });
+  }
+  function setNodeFontScale(node, delta) {
+    node.font_scale = Math.min(MAX_FS, Math.max(MIN_FS, (node.font_scale || 1) + delta));
+    var dc = node.bodyEl && node.bodyEl.querySelector(".doc-content");
+    if (dc) dc.style.fontSize = fontPx(node, CANVAS_BASE) + "px";
+    if (mode === "reader" && currentNodeId === node.id) {
+      var rdc = readerMain.querySelector(".doc-content");
+      if (rdc) rdc.style.fontSize = fontPx(node, READER_BASE) + "px";
+    }
+    scheduleEdges();
+    canvasHooks.persistNode(node);
+  }
+  function layoutNode(node) {
+    var el = node.el;
+    el.style.left = node.x + "px";
+    el.style.top = node.y + "px";
+    el.style.width = node.w + "px";
+    if (!node.collapsed) el.style.height = node.h + "px";
+  }
+  function onPointerGesture(handle, onDown, onMove, onUp) {
+    handle.addEventListener("pointerdown", function(e) {
+      if (!onDown(e)) return;
+      try {
+        handle.setPointerCapture(e.pointerId);
+      } catch (_e) {
+      }
+      function move(ev) {
+        onMove(ev);
+      }
+      function done() {
+        handle.removeEventListener("pointermove", move);
+        handle.removeEventListener("pointerup", done);
+        handle.removeEventListener("pointercancel", done);
+        handle.removeEventListener("lostpointercapture", done);
+        try {
+          handle.releasePointerCapture(e.pointerId);
+        } catch (_e) {
+        }
+        onUp();
+      }
+      handle.addEventListener("pointermove", move);
+      handle.addEventListener("pointerup", done);
+      handle.addEventListener("pointercancel", done);
+      handle.addEventListener("lostpointercapture", done);
+    });
+  }
+  function enableDrag(node, handle) {
+    var sx, sy, ox, oy;
+    onPointerGesture(
+      handle,
+      function(e) {
+        if (e.button !== 0 || e.target.closest(".node-btn")) return false;
+        e.preventDefault();
+        canvasHooks.hideAsk();
+        sx = e.clientX;
+        sy = e.clientY;
+        ox = node.x;
+        oy = node.y;
+        return true;
+      },
+      function(ev) {
+        node.x = ox + (ev.clientX - sx) / view.scale;
+        node.y = oy + (ev.clientY - sy) / view.scale;
+        layoutNode(node);
+        scheduleEdges();
+      },
+      function() {
+        drawEdges();
+        canvasHooks.persistNode(node);
+      }
+    );
+  }
+  function enableResize(node, handle) {
+    var sx, sy, ow, oh;
+    onPointerGesture(
+      handle,
+      function(e) {
+        if (e.button !== 0) return false;
+        e.preventDefault();
+        e.stopPropagation();
+        sx = e.clientX;
+        sy = e.clientY;
+        ow = node.w;
+        oh = node.h;
+        return true;
+      },
+      function(ev) {
+        node.w = Math.max(240, ow + (ev.clientX - sx) / view.scale);
+        node.h = Math.max(160, oh + (ev.clientY - sy) / view.scale);
+        layoutNode(node);
+        scheduleEdges();
+      },
+      function() {
+        drawEdges();
+        canvasHooks.persistNode(node);
+      }
+    );
+  }
+  function toggleCollapse(node, btn) {
+    node.collapsed = !node.collapsed;
+    node.el.classList.toggle("collapsed", node.collapsed);
+    btn.innerHTML = NODE_COLLAPSE_ICON;
+    if (!node.collapsed) layoutNode(node);
+    renderVisibility();
+    drawEdges();
+    canvasHooks.persistNode(node);
+  }
+  function renderVisibility() {
+    for (var id in nodes) {
+      var n = nodes[id];
+      if (!n.el) continue;
+      if (n.id === rootId) {
+        n.el.style.display = "";
+        continue;
+      }
+      n.el.style.display = isVisible(n) ? "" : "none";
+    }
+  }
+  var edgeRaf = 0;
+  function scheduleEdges() {
+    if (edgeRaf) return;
+    edgeRaf = requestAnimationFrame(function() {
+      edgeRaf = 0;
+      drawEdges();
+    });
+  }
+  function effH(n) {
+    return n.collapsed && n.el ? n.el.offsetHeight || 36 : n.h;
+  }
+  function clamp(lo, hi, v) {
+    return Math.max(lo, Math.min(hi, v));
+  }
+  function edgeSides(p, n) {
+    var ph = effH(p), nh = effH(n);
+    var dx = n.x + n.w / 2 - (p.x + p.w / 2);
+    var dy = n.y + nh / 2 - (p.y + ph / 2);
+    var fx = dx / ((p.w + n.w) / 2 + 1);
+    var fy = dy / ((ph + nh) / 2 + 1);
+    if (Math.abs(fx) >= Math.abs(fy)) return dx >= 0 ? ["right", "left"] : ["left", "right"];
+    return dy >= 0 ? ["bottom", "top"] : ["top", "bottom"];
+  }
+  function edgeStart(p, child, side) {
+    var ph = effH(p), ax = null, ay = null, anchored = false;
+    if (!p.collapsed && p.el && p.bodyEl) {
+      var mark = p.bodyEl.querySelector('mark[data-child="' + child.id + '"]');
+      if (mark) {
+        var mr = mark.getBoundingClientRect();
+        if (mr.height > 0) {
+          var er = p.el.getBoundingClientRect();
+          var br2 = p.bodyEl.getBoundingClientRect();
+          ay = p.y + clamp(
+            (br2.top - er.top) / view.scale + 10,
+            (br2.bottom - er.top) / view.scale - 10,
+            (mr.top + mr.height / 2 - er.top) / view.scale
+          );
+          ax = p.x + clamp(
+            (br2.left - er.left) / view.scale + 10,
+            (br2.right - er.left) / view.scale - 10,
+            (mr.left + mr.width / 2 - er.left) / view.scale
+          );
+          anchored = true;
+        }
+      } else if (isFollowup(child) || isNotesBranch(child)) {
+        ay = p.y + ph - 22;
+      }
+    }
+    if (side === "right") return { x: p.x + p.w, y: ay != null ? ay : p.y + ph / 2, anchored };
+    if (side === "left") return { x: p.x, y: ay != null ? ay : p.y + ph / 2, anchored };
+    if (side === "bottom") return { x: ax != null ? ax : p.x + p.w / 2, y: p.y + ph, anchored };
+    return { x: ax != null ? ax : p.x + p.w / 2, y: p.y, anchored };
+  }
+  function edgeEnd(n, side) {
+    var nh = effH(n);
+    if (side === "left") return { x: n.x, y: n.y + nh / 2 };
+    if (side === "right") return { x: n.x + n.w, y: n.y + nh / 2 };
+    if (side === "top") return { x: n.x + n.w / 2, y: n.y };
+    return { x: n.x + n.w / 2, y: n.y + nh };
+  }
+  function ctrlPt(pt, side, d) {
+    if (side === "right") return pt.x + d + " " + pt.y;
+    if (side === "left") return pt.x - d + " " + pt.y;
+    if (side === "bottom") return pt.x + " " + (pt.y + d);
+    return pt.x + " " + (pt.y - d);
+  }
+  var edgeEls = {};
+  var edgeGeometry = {};
+  function ensureEdgeEls(edgeId, childId, className) {
+    var els = edgeEls[edgeId];
+    if (els) return els;
+    var path2 = document.createElementNS(SVGNS, "path");
+    path2.setAttribute("data-child", childId);
+    if (className) path2.classList.add(className);
+    var dot = document.createElementNS(SVGNS, "circle");
+    dot.setAttribute("r", "3");
+    dot.setAttribute("data-child", childId);
+    if (className) dot.classList.add(className);
+    edgesSvg.appendChild(path2);
+    edgesSvg.appendChild(dot);
+    edgeEls[edgeId] = [path2, dot];
+    return edgeEls[edgeId];
+  }
+  function removeEdge(edgeId) {
+    var els = edgeEls[edgeId];
+    if (els) {
+      for (var i2 = 0; i2 < els.length; i2++) if (els[i2].parentNode) els[i2].parentNode.removeChild(els[i2]);
+    }
+    delete edgeEls[edgeId];
+    delete edgeGeometry[edgeId];
+    delete edgeHl[edgeId];
+  }
+  function applyEdgeClasses(childId, path2, dot, anchored) {
+    path2.classList.toggle("edge-hl", !!edgeHl[childId]);
+    dot.classList.toggle("edge-hl", !!edgeHl[childId]);
+    dot.classList.toggle("anchored", !!anchored);
+  }
+  function rebuildEdges() {
+    while (edgesSvg.firstChild) edgesSvg.removeChild(edgesSvg.firstChild);
+    edgeEls = {};
+    edgeGeometry = {};
+    drawEdges();
+  }
+  function drawEdges() {
+    var live = {};
+    var visCache = {};
+    function vis(node) {
+      var k = node.id;
+      if (k in visCache) return visCache[k];
+      return visCache[k] = isVisible(node);
+    }
+    for (var id in nodes) {
+      var n = nodes[id];
+      if (!n.el || !vis(n)) continue;
+      var sources = n.origin && n.origin.synthesis_sources || [];
+      var hidePrimaryEdge = sources.length > 0;
+      if (n.parent_id && !hidePrimaryEdge) {
+        var p = nodes[n.parent_id];
+        if (p && p.el && vis(p)) {
+          live[n.id] = true;
+          var sides = edgeSides(p, n);
+          var start = edgeStart(p, n, sides[0]);
+          var end = edgeEnd(n, sides[1]);
+          var horiz = sides[0] === "left" || sides[0] === "right";
+          var reach = Math.max(40, (horiz ? Math.abs(end.x - start.x) : Math.abs(end.y - start.y)) / 2);
+          var d = "M " + start.x + " " + start.y + " C " + ctrlPt(start, sides[0], reach) + " " + ctrlPt(end, sides[1], reach) + " " + end.x + " " + end.y;
+          var geom = {
+            d,
+            cx: String(start.x),
+            cy: String(start.y),
+            anchored: !!start.anchored
+          };
+          var els = ensureEdgeEls(n.id, n.id, "");
+          var path2 = els[0], dot = els[1], prev = edgeGeometry[n.id];
+          if (!prev || prev.d !== geom.d) path2.setAttribute("d", geom.d);
+          if (!prev || prev.cx !== geom.cx) dot.setAttribute("cx", geom.cx);
+          if (!prev || prev.cy !== geom.cy) dot.setAttribute("cy", geom.cy);
+          if (!prev || prev.anchored !== geom.anchored) applyEdgeClasses(n.id, path2, dot, geom.anchored);
+          else if (!!edgeHl[n.id] !== path2.classList.contains("edge-hl")) applyEdgeClasses(n.id, path2, dot, geom.anchored);
+          edgeGeometry[n.id] = geom;
+        }
+      }
+      for (var si = 0; si < sources.length; si++) {
+        var sourceId = sources[si];
+        var sp = nodes[sourceId];
+        if (!sp || !sp.el || !vis(sp)) continue;
+        var edgeId = sourceId + "->" + n.id;
+        live[edgeId] = true;
+        var ssides = edgeSides(sp, n);
+        var sstart = edgeStart(sp, n, ssides[0]);
+        var send = edgeEnd(n, ssides[1]);
+        var shoriz = ssides[0] === "left" || ssides[0] === "right";
+        var sreach = Math.max(40, (shoriz ? Math.abs(send.x - sstart.x) : Math.abs(send.y - sstart.y)) / 2);
+        var sd = "M " + sstart.x + " " + sstart.y + " C " + ctrlPt(sstart, ssides[0], sreach) + " " + ctrlPt(send, ssides[1], sreach) + " " + send.x + " " + send.y;
+        var sgeom = { d: sd, cx: String(sstart.x), cy: String(sstart.y), anchored: false };
+        var sels = ensureEdgeEls(edgeId, n.id, "source-edge");
+        var spath = sels[0], sdot = sels[1], sprev = edgeGeometry[edgeId];
+        if (!sprev || sprev.d !== sgeom.d) spath.setAttribute("d", sgeom.d);
+        if (!sprev || sprev.cx !== sgeom.cx) sdot.setAttribute("cx", sgeom.cx);
+        if (!sprev || sprev.cy !== sgeom.cy) sdot.setAttribute("cy", sgeom.cy);
+        edgeGeometry[edgeId] = sgeom;
+      }
+    }
+    for (var edgeId in edgeEls) {
+      if (!live[edgeId]) removeEdge(edgeId);
+    }
+  }
+  var edgeHl = {};
+  function setEdgeHighlight(childId, on) {
+    if (on) edgeHl[childId] = true;
+    else delete edgeHl[childId];
+    var els = edgeEls[childId];
+    if (!els) return;
+    for (var i2 = 0; i2 < els.length; i2++) els[i2].classList.toggle("edge-hl", on);
+  }
+  function clearEdgeHighlight(childId) {
+    delete edgeHl[childId];
+  }
+  function focusOrigin(node, on) {
+    if (mode !== "canvas") return;
+    setEdgeHighlight(node.id, on);
+    var p = node.parent_id ? nodes[node.parent_id] : null;
+    if (p && p.bodyEl) {
+      var marks = p.bodyEl.querySelectorAll('mark[data-child="' + node.id + '"]');
+      for (var i2 = 0; i2 < marks.length; i2++) marks[i2].classList.toggle("mark-focus", on);
+    }
+  }
+  function onWorldMouseOver(e) {
+    var m = e.target.closest && e.target.closest("mark[data-child]");
+    if (m) setEdgeHighlight(m.dataset.child, true);
+  }
+  function onWorldMouseOut(e) {
+    var m = e.target.closest && e.target.closest("mark[data-child]");
+    if (m) setEdgeHighlight(m.dataset.child, false);
+  }
+  function initViewportPan() {
+    var sx, sy, ox, oy;
+    onPointerGesture(
+      viewport,
+      function(e) {
+        if (e.button !== 0 || e.target.closest(".node")) return false;
+        canvasHooks.hideAsk();
+        viewAnimId++;
+        viewport.classList.add("panning");
+        sx = e.clientX;
+        sy = e.clientY;
+        ox = view.x;
+        oy = view.y;
+        return true;
+      },
+      function(ev) {
+        view.x = ox + (ev.clientX - sx);
+        view.y = oy + (ev.clientY - sy);
+        applyTransform();
+      },
+      function() {
+        viewport.classList.remove("panning");
+      }
+    );
+  }
+  function canScroll(el, dx, dy) {
+    if (dx && el.scrollWidth > el.clientWidth + 1) {
+      if (dx < 0 ? el.scrollLeft > 0 : el.scrollLeft + el.clientWidth < el.scrollWidth - 1) return true;
+    }
+    if (dy && el.scrollHeight > el.clientHeight + 1) {
+      if (dy < 0 ? el.scrollTop > 0 : el.scrollTop + el.clientHeight < el.scrollHeight - 1) return true;
+    }
+    return false;
+  }
+  var wheelKind = null;
+  var wheelCard = null;
+  var wheelTs = 0;
+  function onViewportWheel(e) {
+    if (e.ctrlKey) {
+      e.preventDefault();
+      wheelKind = null;
+      zoomAt(e.clientX, e.clientY, Math.exp(-e.deltaY * 0.01));
+      return;
+    }
+    if (!wheelKind || e.timeStamp - wheelTs > 180) {
+      wheelCard = e.target.closest && e.target.closest(".node") || null;
+      wheelKind = wheelCard ? "card" : "pan";
+    }
+    wheelTs = e.timeStamp;
+    if (wheelKind === "pan") {
+      e.preventDefault();
+      viewAnimId++;
+      view.x -= e.deltaX;
+      view.y -= e.deltaY;
+      applyTransform();
+      return;
+    }
+    var over = e.target.closest && e.target.closest(".node") || null;
+    if (over !== wheelCard) {
+      e.preventDefault();
+      var nb = wheelCard ? wheelCard.querySelector(".node-body") : null;
+      if (nb) {
+        nb.scrollLeft += e.deltaX;
+        nb.scrollTop += e.deltaY;
+      }
+      return;
+    }
+    var el = e.target, consumable = false;
+    while (el && el.nodeType === 1) {
+      if (canScroll(el, e.deltaX, e.deltaY)) {
+        consumable = true;
+        break;
+      }
+      if (el === over) break;
+      el = el.parentNode;
+    }
+    if (!consumable) e.preventDefault();
+  }
+  function frameAll(animate, source2) {
+    var ids = Object.keys(nodes).filter(function(id) {
+      return isVisible(nodes[id]);
+    });
+    if (!ids.length) return;
+    var minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    ids.forEach(function(id) {
+      var n = nodes[id];
+      minX = Math.min(minX, n.x);
+      minY = Math.min(minY, n.y);
+      maxX = Math.max(maxX, n.x + n.w);
+      maxY = Math.max(maxY, n.y + (n.collapsed ? 40 : n.h));
+    });
+    var vw = viewport.clientWidth || window.innerWidth, vh = viewport.clientHeight || window.innerHeight, pad2 = 100;
+    var ts = Math.max(MIN_SCALE, Math.min(MAX_SCALE, Math.min((vw - pad2) / (maxX - minX), (vh - pad2) / (maxY - minY), 1.2)));
+    var tx = vw / 2 - (minX + (maxX - minX) / 2) * ts, ty = vh / 2 - (minY + (maxY - minY) / 2) * ts;
+    if (animate) {
+      animateView(tx, ty, ts, { source: source2, duration: 270, ease: "inOut" });
+      return;
+    }
+    view.scale = ts;
+    view.x = tx;
+    view.y = ty;
+    applyTransform();
+  }
+  function onViewportDblClick(e) {
+    if (e.target.closest && e.target.closest(".node")) return;
+    frameAll(true, motionSourceFromEvent(e));
+  }
+  function tidy(source2) {
+    var visited = {};
+    function moveSubtree(node, dx, dy) {
+      node.x += dx;
+      node.y += dy;
+      childrenOf(node.id).filter(function(k) {
+        return visited[k.id];
+      }).sort(nodeOrder2).forEach(function(k) {
+        moveSubtree(k, dx, dy);
+      });
+    }
+    function place(node, x, y) {
+      visited[node.id] = true;
+      node.x = x;
+      node.y = y;
+      var bounds = nodeBounds2(node);
+      if (node.collapsed) return bounds;
+      var kids = childrenOf(node.id).sort(nodeOrder2);
+      var selectionKids = kids.filter(isSelectionBranch);
+      var followupKids = kids.filter(isFollowup);
+      var notesKids = kids.filter(isNotesBranch);
+      var sideBounds = null;
+      var sideX = node.x + node.w + TREE_PARENT_GAP;
+      var sideY = node.y;
+      selectionKids.forEach(function(k) {
+        var kb = place(k, sideX, sideY);
+        sideBounds = unionBounds2(sideBounds, kb);
+        bounds = unionBounds2(bounds, kb);
+        sideY = kb.maxY + TREE_STACK_GAP;
+      });
+      var belowY = node.y + effH(node) + TREE_PARENT_GAP;
+      function placeBelow(kids2) {
+        kids2.forEach(function(k) {
+          var kb = place(k, node.x, belowY);
+          if (boundsOverlap2(kb, sideBounds)) {
+            var dy = sideBounds.maxY + TREE_STACK_GAP - kb.minY;
+            moveSubtree(k, 0, dy);
+            kb = shiftBounds2(kb, 0, dy);
+          }
+          bounds = unionBounds2(bounds, kb);
+          belowY = kb.maxY + TREE_STACK_GAP;
+        });
+      }
+      placeBelow(followupKids);
+      placeBelow(notesKids);
+      return bounds;
+    }
+    var root = nodes[rootId];
+    if (!root) return;
+    place(root, 0, 0);
+    var ids = Object.keys(visited);
+    var moved = [];
+    ids.forEach(function(id) {
+      var nn = nodes[id];
+      layoutNode(nn);
+      moved.push(nn);
+    });
+    canvasHooks.persistNodesBulk(moved);
+    rebuildEdges();
+    frameAll(true, source2);
+  }
+  function ensureCanvasBuilt() {
+    if (canvasBuilt) return;
+    setCanvasBuilt(true);
+    Object.keys(nodes).forEach(function(id) {
+      if (!nodes[id].el) createNodeEl(nodes[id]);
+    });
+    renderVisibility();
+    applyTransform();
+  }
+  function setMode(m) {
+    if (m === "canvas" && mode === "reader") {
+      var cur = nodes[currentNodeId];
+      if (cur) cur._scrollTop = readerMain.scrollTop;
+    }
+    setModeValue(m);
+    if (m === "canvas") {
+      ensureCanvasBuilt();
+      canvasHooks.hidePeek();
+      document.body.classList.add("mode-canvas");
+      requestAnimationFrame(function() {
+        rebuildEdges();
+        if (!canvasFramed) {
+          setCanvasFramed(true);
+          frameAll();
+        }
+      });
+      canvasHooks.scheduleViewSave();
+    } else {
+      openNode(currentNodeId);
+    }
+  }
+
+  // src/ui/ask-followups.js
+  var askHooks = {
+    post: function() {
+      return Promise.resolve({ ok: true });
+    },
+    closeShare: function() {
+    },
+    closeSourcesPanel: function() {
+    },
+    hideConfirm: function() {
+    },
+    hidePeek: function() {
+    }
+  };
+  var selectionShowTimer = 0;
+  function registerAskHooks(hooks) {
+    Object.assign(askHooks, hooks || {});
+  }
+  function initAskFollowups() {
+    document.addEventListener("mousedown", function(e) {
+      var c2 = e.target && e.target.closest ? function(sel) {
+        return e.target.closest(sel);
+      } : function() {
+        return null;
+      };
+      if (!c2("#sharemenu") && !c2("#r-share") && !c2("#t-share")) askHooks.closeShare();
+      if (!c2("#sources-panel") && !c2("#r-sources") && !c2("#t-sources")) askHooks.closeSourcesPanel();
+      if (!c2("#confirm")) askHooks.hideConfirm();
+      if (!c2("#peek") && !c2("mark[data-child]")) askHooks.hidePeek();
+      if (inAsk(e)) return;
+      hideAsk();
+    });
+    document.addEventListener("mouseup", function(e) {
+      scheduleMaybeShowAsk(e);
+    });
+    document.addEventListener("pointerup", function(e) {
+      scheduleMaybeShowAsk(e);
+    });
+    document.addEventListener("touchend", function(e) {
+      scheduleMaybeShowAsk(e);
+    });
+    document.addEventListener("keyup", function(e) {
+      if (e.key === "Shift" || e.key.indexOf("Arrow") === 0) scheduleMaybeShowAsk(e);
+    });
+    document.addEventListener("selectionchange", function() {
+      scheduleMaybeShowAsk(null, 80);
+    });
+    askGo.addEventListener("click", function(e) {
+      submitAsk(null, motionSourceFromEvent(e));
+    });
+    document.getElementById("ask-lenses").addEventListener("click", function(e) {
+      var b = e.target.closest ? e.target.closest(".lens") : null;
+      if (b) submitAsk(b.getAttribute("data-lens"), motionSourceFromEvent(e));
+    });
+    askText.addEventListener("input", function() {
+      autoGrowEl(askText, 110);
+    });
+    askText.addEventListener("keydown", onAskTextKeydown);
+    composerText.addEventListener("input", function() {
+      autoGrowComposer();
+      updateComposerState();
+    });
+    composerText.addEventListener("keydown", function(e) {
+      if (e.key === "Enter" && !e.shiftKey) {
+        e.preventDefault();
+        submitFollowup("keyboard");
+      }
+    });
+    composerSend.addEventListener("click", function(e) {
+      submitFollowup(motionSourceFromEvent(e));
+    });
+    readerMain.addEventListener("wheel", interruptScrollAnimation, { passive: true });
+    readerMain.addEventListener("touchstart", interruptScrollAnimation, { passive: true });
+    readerMain.addEventListener("pointerdown", interruptScrollAnimation, { passive: true });
+    readerMain.addEventListener("scroll", function() {
+      if (performance.now() > scrollAnimIgnoreUntil) cancelScrollAnimation();
+    }, { passive: true });
+    document.addEventListener("keydown", interruptScrollAnimation);
+  }
+  function inAsk(e) {
+    return e.target && e.target.closest && e.target.closest("#ask");
+  }
+  function scheduleMaybeShowAsk(e, delay) {
+    if (e && inAsk(e)) return;
+    if (selectionShowTimer) clearTimeout(selectionShowTimer);
+    selectionShowTimer = setTimeout(function() {
+      selectionShowTimer = 0;
+      maybeShowAsk();
+    }, delay || 0);
+  }
+  function maybeShowAsk() {
+    var sel = window.getSelection();
+    if (!sel || sel.isCollapsed || !sel.toString().trim()) return;
+    var anchor = sel.anchorNode && sel.anchorNode.nodeType === 3 ? sel.anchorNode.parentNode : sel.anchorNode;
+    var dc = anchor && anchor.closest ? anchor.closest(".doc-content") : null;
+    if (!dc) return;
+    var parentId = dc.dataset.nodeId;
+    if (!parentId || !nodes[parentId] || nodes[parentId].status === "pending") return;
+    if (closed) {
+      flashHint(frozen ? "This is a read-only snapshot \u2014 asking needs the live Rabbithole." : "Session ended \u2014 reopen this Rabbithole from your terminal to keep asking.");
+      return;
+    }
+    var range = sel.getRangeAt(0);
+    if (!dc.contains(range.startContainer) || !dc.contains(range.endContainer)) return;
+    var startOff = charOffset(dc, range.startContainer, range.startOffset);
+    var endOff = charOffset(dc, range.endContainer, range.endOffset);
+    if (endOff <= startOff) return;
+    pendingAsk = {
+      parentId,
+      container: dc,
+      selectedText: sel.toString().trim(),
+      startOff,
+      endOff,
+      range: range.cloneRange()
+    };
+    paintAskHighlight(pendingAsk.range);
+    askText.value = "";
+    askText.placeholder = "Ask about this\u2026 \u21B5 = Explain";
+    var rect = range.getBoundingClientRect();
+    ask.style.left = Math.min(window.innerWidth - 392, Math.max(10, rect.left)) + "px";
+    ask.style.top = Math.min(window.innerHeight - 200, rect.bottom + 8) + "px";
+    ask.classList.add("visible");
+    setSurfaceOrigin(ask, rect);
+    autoGrowEl(askText, 110);
+    askText.focus();
+  }
+  var pendingAsk = null;
+  function hideAsk() {
+    ask.classList.remove("visible");
+    pendingAsk = null;
+    clearAskHighlight();
+  }
+  function paintAskHighlight(range) {
+    try {
+      if (window.Highlight && window.CSS && CSS.highlights) CSS.highlights.set("rh-ask", new Highlight(range));
+    } catch (e) {
+    }
+  }
+  function clearAskHighlight() {
+    try {
+      if (window.CSS && CSS.highlights) CSS.highlights.delete("rh-ask");
+    } catch (e) {
+    }
+  }
+  var LENS_KEYS = { "1": "explain", "2": "eli5", "3": "example", "4": "deeper" };
+  function onAskTextKeydown(e) {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      submitAsk(null, "keyboard");
+    } else if (e.key === "Escape") {
+      hideAsk();
+    } else if (askText.value === "" && !e.metaKey && !e.ctrlKey && !e.altKey && LENS_KEYS[e.key]) {
+      e.preventDefault();
+      submitAsk(LENS_KEYS[e.key], "keyboard");
+    }
+  }
+  function submitAsk(lensKey, source2) {
+    if (!pendingAsk || closed) return;
+    var parent = nodes[pendingAsk.parentId];
+    if (!parent) {
+      hideAsk();
+      return;
+    }
+    var lens = lensKey && LENSES[lensKey] ? lensKey : null;
+    var question = lens ? LENSES[lens].q : askText.value.trim();
+    var requestId = uuid(), childId = uuid();
+    var pos = placeChild2(parent, BRANCH_SELECTION);
+    var anchor = { offset_start: pendingAsk.startOff, offset_end: pendingAsk.endOff };
+    var node = {
+      id: childId,
+      parent_id: parent.id,
+      title: lens ? lensLabel2(lens) : question ? truncate2(question, 48) : "\u2026",
+      html: "",
+      md: "",
+      base_url: parent.base_url || null,
+      base_url_source: parent.base_url ? "inherited" : null,
+      read: false,
+      origin: { selected_text: pendingAsk.selectedText, question, lens, anchor, branch_type: BRANCH_SELECTION },
+      x: pos.x,
+      y: pos.y,
+      w: DEFAULT_CHILD.w,
+      h: DEFAULT_CHILD.h,
+      font_scale: 1,
+      collapsed: false,
+      status: "pending",
+      _order: nextOrder(),
+      _startTs: Date.now()
+    };
+    nodes[childId] = node;
+    if (canvasBuilt) {
+      createNodeEl(node, true);
+      renderVisibility();
+      drawEdges();
+    }
+    if (mode === "reader") {
+      var rdc = readerMain.querySelector('.doc-content[data-node-id="' + parent.id + '"]');
+      wrapInContainer(rdc, anchor, childId, "hl mark-pending");
+      if (currentNodeId === parent.id) renderSidebar();
+    }
+    if (parent.bodyEl) {
+      wrapInContainer(parent.bodyEl.querySelector(".doc-content"), anchor, childId, "hl mark-pending");
+      scheduleEdges();
+    }
+    var sel = window.getSelection();
+    if (sel) sel.removeAllRanges();
+    hideAsk();
+    askHooks.post({
+      type: "branch_request",
+      request_id: requestId,
+      node_id: childId,
+      parent_id: parent.id,
+      selected_text: node.origin.selected_text,
+      question,
+      lens,
+      anchor,
+      branch_type: BRANCH_SELECTION,
+      position: { x: node.x, y: node.y },
+      size: { w: node.w, h: node.h }
+    }).then(function(res) {
+      if (!res || !res.ok) rollbackBranch(node);
+    });
+    revealNode(node, source2);
+    refreshAmbient();
+  }
+  function updateComposerState() {
+    var current = nodes[currentNodeId];
+    var down = closed || !current || current.status === "pending";
+    composerText.disabled = down;
+    composerInner.classList.toggle("disabled", down);
+    if (frozen) composerText.placeholder = "Read-only snapshot \u2014 open the live Rabbithole to keep asking";
+    else if (closed) composerText.placeholder = "Session ended \u2014 reopen this Rabbithole from your terminal; saved questions are answered there";
+    else if (current && current.status === "pending") composerText.placeholder = "This answer is still being written\u2026";
+    else if (connLost || !agentAttached) composerText.placeholder = "The agent is away \u2014 questions are saved and answered when it returns\u2026";
+    else composerText.placeholder = "Ask a follow-up about this document\u2026";
+    composerSend.disabled = down || !composerText.value.trim();
+  }
+  function autoGrowComposer() {
+    autoGrowEl(composerText, 140);
+  }
+  function sendFollowup(parent, question, lens, synthesis, opts) {
+    opts = opts || {};
+    var requestId = uuid(), childId = uuid();
+    var pos = opts.position || placeChild2(parent, BRANCH_FOLLOWUP);
+    var node = {
+      id: childId,
+      parent_id: parent.id,
+      title: opts.title || (synthesis ? "Synthesis" : lens ? lensLabel2(lens) : truncate2(question, 48)),
+      html: "",
+      md: "",
+      base_url: parent.base_url || null,
+      base_url_source: parent.base_url ? "inherited" : null,
+      read: false,
+      origin: { selected_text: opts.selectedText || "", question, lens, synthesis: !!synthesis, synthesis_mode: opts.synthesisMode || null, synthesis_sources: opts.synthesisSources || null, anchor: null, branch_type: BRANCH_FOLLOWUP },
+      x: pos.x,
+      y: pos.y,
+      w: DEFAULT_CHILD.w,
+      h: DEFAULT_CHILD.h,
+      font_scale: 1,
+      collapsed: false,
+      status: "pending",
+      _order: nextOrder(),
+      _startTs: Date.now()
+    };
+    nodes[childId] = node;
+    if (canvasBuilt) {
+      createNodeEl(node, true);
+      renderVisibility();
+      drawEdges();
+    }
+    if (currentNodeId === parent.id && mode === "reader") {
+      if (synthesis) renderSidebar();
+      else {
+        var t = ensureThread();
+        if (t) t.appendChild(buildThreadItem(node));
+      }
+    }
+    var payload = {
+      type: "branch_request",
+      request_id: requestId,
+      node_id: childId,
+      parent_id: parent.id,
+      selected_text: opts.selectedText || "",
+      question,
+      lens,
+      anchor: null,
+      branch_type: BRANCH_FOLLOWUP,
+      position: { x: node.x, y: node.y },
+      size: { w: node.w, h: node.h }
+    };
+    if (synthesis) payload.synthesis = true;
+    if (opts.synthesisMode) payload.synthesis_mode = opts.synthesisMode;
+    if (opts.synthesisSources) payload.synthesis_sources = opts.synthesisSources;
+    askHooks.post(payload).then(function(res) {
+      if (!res || !res.ok) rollbackBranch(node);
+    });
+    refreshAmbient();
+    return node;
+  }
+  var scrollAnimId = 0;
+  var scrollAnimIgnoreUntil = 0;
+  function cancelScrollAnimation() {
+    scrollAnimId++;
+  }
+  function setAnimatedScrollTop(el, value) {
+    scrollAnimIgnoreUntil = performance.now() + 80;
+    el.scrollTop = value;
+  }
+  function animateScroll(el, target, source2) {
+    var myId = ++scrollAnimId;
+    if (document.hidden || shouldReduceMotion() || source2 !== "pointer") {
+      el.scrollTop = target;
+      return;
+    }
+    var s = el.scrollTop, t0 = performance.now(), D2 = 240;
+    function step(t) {
+      if (myId !== scrollAnimId) return;
+      var p = Math.min(1, (t - t0) / D2), k = easeOutMotion(p);
+      setAnimatedScrollTop(el, s + (target - s) * k);
+      if (p < 1) requestAnimationFrame(step);
+    }
+    requestAnimationFrame(step);
+  }
+  function interruptScrollAnimation() {
+    cancelScrollAnimation();
+  }
+  function submitFollowup(source2) {
+    if (closed) {
+      flashHint(frozen ? "This is a read-only snapshot." : "Session ended \u2014 reopen this Rabbithole from your terminal to continue.");
+      return;
+    }
+    var parent = nodes[currentNodeId];
+    if (!parent || parent.status === "pending") return;
+    var question = composerText.value.trim();
+    if (!question) return;
+    sendFollowup(parent, question, null);
+    composerText.value = "";
+    autoGrowComposer();
+    updateComposerState();
+    animateScroll(readerMain, readerMain.scrollHeight, source2);
+  }
+  function rollbackBranch(node) {
+    var live = nodes[node.id];
+    if (!live || live.status === "answered") return;
+    delete nodes[node.id];
+    if (node.el && node.el.parentNode) node.el.parentNode.removeChild(node.el);
+    removeMarks(readerMain, node.id);
+    removeThreadItem(node.id);
+    var p = nodes[node.parent_id];
+    if (p && p.bodyEl) removeMarks(p.bodyEl, node.id);
+    if (canvasBuilt) drawEdges();
+    if (mode === "reader" && currentNodeId === node.parent_id) renderSidebar();
+    refreshAmbient();
+    flashHint("Couldn't reach the agent \u2014 that ask was undone.");
+  }
+  function placeChild2(parent, branchType) {
+    return placeChild(parent, branchType, {
+      childrenOf,
+      effH,
+      sort: nodeOrder2,
+      childSize: DEFAULT_CHILD
+    });
+  }
+
+  // src/ui/focus-trap.js
+  var FOCUSABLE = [
+    "a[href]",
+    "button:not([disabled])",
+    "textarea:not([disabled])",
+    "input:not([disabled])",
+    "select:not([disabled])",
+    "[tabindex]:not([tabindex='-1'])"
+  ].join(",");
+  function activateFocusTrap(root, options2) {
+    if (!root) return function() {
+    };
+    options2 = options2 || {};
+    var previous = document.activeElement;
+    if (!root.hasAttribute("tabindex")) root.setAttribute("tabindex", "-1");
+    function focusables() {
+      var all = root.querySelectorAll ? Array.prototype.slice.call(root.querySelectorAll(FOCUSABLE)) : [];
+      return all.filter(function(el) {
+        return el.offsetParent !== null || el === document.activeElement || el === options2.initialFocus;
+      });
+    }
+    function focusInitial() {
+      var target = options2.initialFocus || focusables()[0] || root;
+      try {
+        target.focus({ preventScroll: true });
+      } catch (e) {
+        try {
+          target.focus();
+        } catch (_e) {
+        }
+      }
+    }
+    function onKeydown(e) {
+      if (e.key === "Escape" && typeof options2.onEscape === "function") {
+        e.preventDefault();
+        e.stopPropagation();
+        options2.onEscape(e);
+        return;
+      }
+      if (e.key !== "Tab") return;
+      var items = focusables();
+      if (!items.length) {
+        e.preventDefault();
+        root.focus();
+        return;
+      }
+      var first = items[0];
+      var last = items[items.length - 1];
+      if (e.shiftKey && document.activeElement === first) {
+        e.preventDefault();
+        last.focus();
+      } else if (!e.shiftKey && document.activeElement === last) {
+        e.preventDefault();
+        first.focus();
+      }
+    }
+    document.addEventListener("keydown", onKeydown, true);
+    setTimeout(focusInitial, 0);
+    return function deactivateFocusTrap() {
+      document.removeEventListener("keydown", onKeydown, true);
+      if (options2.restoreFocus !== false && previous && previous.focus) {
+        try {
+          previous.focus({ preventScroll: true });
+        } catch (e) {
+          try {
+            previous.focus();
+          } catch (_e) {
+          }
+        }
+      }
+    };
+  }
+
+  // src/ui/image-ux.js
+  var imageResizeMemory = {};
+  var activeLightbox = null;
+  var IMAGE_MIN_WIDTH = 120;
+  var LIGHTBOX_MIN_ZOOM = 0.25;
+  var LIGHTBOX_MAX_ZOOM = 6;
+  function imageSurfaceScale(dc) {
+    if (!dc || !dc.offsetWidth) return 1;
+    var rect = dc.getBoundingClientRect();
+    return rect.width ? rect.width / dc.offsetWidth : 1;
+  }
+  function imageMemoryKey(dc, img, index, surfaceKey) {
+    var nodeId = dc && dc.dataset && dc.dataset.nodeId || "doc";
+    return String(surfaceKey || "surface") + ":" + nodeId + ":" + index + ":" + (img.getAttribute("src") || "");
+  }
+  function clampImageWidth(dc, value) {
+    var max = Math.max(IMAGE_MIN_WIDTH, dc ? dc.clientWidth : IMAGE_MIN_WIDTH);
+    return Math.max(IMAGE_MIN_WIDTH, Math.min(max, value));
+  }
+  function nearestImageScrollContainer(el) {
+    var cur = el ? el.parentElement : null;
+    while (cur && cur !== document.body && cur !== document.documentElement) {
+      var style = window.getComputedStyle(cur);
+      var oy = style.overflowY;
+      if ((oy === "auto" || oy === "scroll" || oy === "overlay") && cur.scrollHeight > cur.clientHeight + 1) return cur;
+      cur = cur.parentElement;
+    }
+    return document.scrollingElement || document.documentElement;
+  }
+  function imageScrollScale(scroller) {
+    if (!scroller || !scroller.offsetHeight) return 1;
+    var rect = scroller.getBoundingClientRect();
+    return rect.height ? rect.height / scroller.offsetHeight : 1;
+  }
+  function keepImageHandleAnchored(scroller, beforeRect, afterRect) {
+    if (!scroller || !beforeRect || !afterRect) return;
+    var delta = afterRect.bottom - beforeRect.bottom;
+    if (!delta) return;
+    scroller.scrollTop += delta / imageScrollScale(scroller);
+  }
+  function applyImageWidth(frame, width) {
+    frame.style.width = Math.round(width) + "px";
+    frame.dataset.rhResized = "1";
+  }
+  function resetImageWidth(frame, key) {
+    frame.style.width = "";
+    delete frame.dataset.rhResized;
+    if (key) delete imageResizeMemory[key];
+  }
+  function beginImageResize(e, dc, frame, key) {
+    if (e.button !== 0) return;
+    e.preventDefault();
+    e.stopPropagation();
+    hideAsk();
+    var scale = imageSurfaceScale(dc);
+    var startX = e.clientX;
+    var startW = frame.getBoundingClientRect().width / scale;
+    var scroller = nearestImageScrollContainer(frame);
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch (_e) {
+    }
+    function move(ev) {
+      ev.preventDefault();
+      ev.stopPropagation();
+      var next = clampImageWidth(dc, startW + (ev.clientX - startX) / scale);
+      var before = frame.getBoundingClientRect();
+      applyImageWidth(frame, next);
+      keepImageHandleAnchored(scroller, before, frame.getBoundingClientRect());
+      imageResizeMemory[key] = next;
+      scheduleEdges();
+    }
+    function done(ev) {
+      if (ev) ev.stopPropagation();
+      window.removeEventListener("pointermove", move, true);
+      window.removeEventListener("pointerup", done, true);
+      window.removeEventListener("pointercancel", done, true);
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch (_e) {
+      }
+      scheduleEdges();
+    }
+    window.addEventListener("pointermove", move, true);
+    window.addEventListener("pointerup", done, true);
+    window.addEventListener("pointercancel", done, true);
+  }
+  function setLightboxTransform(img, state) {
+    img.style.setProperty("--rh-zoom", state.scale);
+    img.style.setProperty("--rh-pan-x", Math.round(state.x) + "px");
+    img.style.setProperty("--rh-pan-y", Math.round(state.y) + "px");
+  }
+  function clampLightboxZoom(value) {
+    return Math.max(LIGHTBOX_MIN_ZOOM, Math.min(LIGHTBOX_MAX_ZOOM, value));
+  }
+  function pointerDistance(a, b) {
+    var dx = a.clientX - b.clientX;
+    var dy = a.clientY - b.clientY;
+    return Math.sqrt(dx * dx + dy * dy);
+  }
+  function openImageLightbox(src, alt) {
+    closeImageLightbox();
+    var overlay = document.createElement("div");
+    overlay.className = "rh-lightbox";
+    overlay.setAttribute("role", "dialog");
+    overlay.setAttribute("aria-modal", "true");
+    overlay.setAttribute("aria-label", alt || "Image preview");
+    overlay.setAttribute("tabindex", "-1");
+    var img = document.createElement("img");
+    img.className = "rh-lightbox-img";
+    img.src = src;
+    img.alt = alt || "";
+    img.draggable = false;
+    overlay.appendChild(img);
+    document.body.appendChild(overlay);
+    var state = { scale: 1, x: 0, y: 0 };
+    var drag = null;
+    var pointers = {};
+    var pinch = null;
+    setLightboxTransform(img, state);
+    var trap = activateFocusTrap(overlay, { initialFocus: overlay, onEscape: closeImageLightbox });
+    activeLightbox = { el: overlay, key: onKey, trap };
+    function onKey(e) {
+      if (e.key !== "Escape") return;
+      e.preventDefault();
+      e.stopPropagation();
+      closeImageLightbox();
+    }
+    function clearPointer(id) {
+      delete pointers[id];
+      var keys = Object.keys(pointers);
+      if (keys.length < 2) pinch = null;
+      if (!keys.length) drag = null;
+    }
+    overlay.addEventListener("click", function(e) {
+      if (e.target === overlay) closeImageLightbox();
+    });
+    overlay.addEventListener("wheel", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      var next = clampLightboxZoom(state.scale * (e.deltaY < 0 ? 1.12 : 0.88));
+      state.scale = next;
+      if (state.scale <= 1) {
+        state.x = 0;
+        state.y = 0;
+      }
+      setLightboxTransform(img, state);
+    }, { passive: false });
+    overlay.addEventListener("pointerdown", function(e) {
+      e.preventDefault();
+      e.stopPropagation();
+      pointers[e.pointerId] = { clientX: e.clientX, clientY: e.clientY };
+      try {
+        overlay.setPointerCapture(e.pointerId);
+      } catch (_e) {
+      }
+      var ids = Object.keys(pointers);
+      if (ids.length >= 2) {
+        pinch = { dist: pointerDistance(pointers[ids[0]], pointers[ids[1]]), scale: state.scale };
+        drag = null;
+      } else if (e.target === img && state.scale > 1) {
+        drag = { x: e.clientX, y: e.clientY, ox: state.x, oy: state.y };
+      }
+    });
+    overlay.addEventListener("pointermove", function(e) {
+      if (!pointers[e.pointerId]) return;
+      e.preventDefault();
+      e.stopPropagation();
+      pointers[e.pointerId] = { clientX: e.clientX, clientY: e.clientY };
+      var ids = Object.keys(pointers);
+      if (pinch && ids.length >= 2) {
+        var dist = pointerDistance(pointers[ids[0]], pointers[ids[1]]);
+        if (pinch.dist > 0) state.scale = clampLightboxZoom(pinch.scale * dist / pinch.dist);
+        if (state.scale <= 1) {
+          state.x = 0;
+          state.y = 0;
+        }
+        setLightboxTransform(img, state);
+      } else if (drag && state.scale > 1) {
+        state.x = drag.ox + e.clientX - drag.x;
+        state.y = drag.oy + e.clientY - drag.y;
+        setLightboxTransform(img, state);
+      }
+    });
+    overlay.addEventListener("pointerup", function(e) {
+      clearPointer(e.pointerId);
+    });
+    overlay.addEventListener("pointercancel", function(e) {
+      clearPointer(e.pointerId);
+    });
+    document.addEventListener("keydown", onKey, true);
+  }
+  function closeImageLightbox() {
+    if (!activeLightbox) return;
+    document.removeEventListener("keydown", activeLightbox.key, true);
+    if (typeof activeLightbox.trap === "function") activeLightbox.trap();
+    if (activeLightbox.el && activeLightbox.el.parentNode) activeLightbox.el.parentNode.removeChild(activeLightbox.el);
+    activeLightbox = null;
+  }
+  function mountDocImages(dc, node, base, surfaceKey) {
+    if (!dc || !dc.querySelectorAll) return;
+    var imgs = dc.querySelectorAll("img");
+    for (var i2 = 0; i2 < imgs.length; i2++) {
+      var img = imgs[i2];
+      if (img.dataset.rhImgReady === "1") continue;
+      if (img.closest(".viz, .viz-mounted")) continue;
+      var frame = img.parentNode && img.parentNode.classList && img.parentNode.classList.contains("rh-img-frame") ? img.parentNode : null;
+      if (!frame) {
+        frame = document.createElement("span");
+        frame.className = "rh-img-frame";
+        img.parentNode.insertBefore(frame, img);
+        frame.appendChild(img);
+      }
+      var key = imageMemoryKey(dc, img, i2, surfaceKey || visualSurfaceKey(node, base));
+      img.dataset.rhImgReady = "1";
+      img.draggable = false;
+      if (imageResizeMemory[key]) applyImageWidth(frame, imageResizeMemory[key]);
+      var handle = document.createElement("button");
+      handle.type = "button";
+      handle.className = "rh-img-handle";
+      handle.setAttribute("aria-label", "Resize image");
+      handle.title = "Drag to resize \xB7 double-click to reset";
+      frame.appendChild(handle);
+      frame.addEventListener("pointerdown", function(e) {
+        e.stopPropagation();
+      });
+      img.addEventListener("click", function(e) {
+        e.preventDefault();
+        e.stopPropagation();
+        openImageLightbox(e.currentTarget.currentSrc || e.currentTarget.src, e.currentTarget.alt);
+      });
+      handle.addEventListener("pointerdown", /* @__PURE__ */ (function(f, k) {
+        return function(e) {
+          beginImageResize(e, dc, f, k);
+        };
+      })(frame, key));
+      handle.addEventListener("dblclick", /* @__PURE__ */ (function(f, k) {
+        return function(e) {
+          e.preventDefault();
+          e.stopPropagation();
+          var scroller = nearestImageScrollContainer(f);
+          var before = f.getBoundingClientRect();
+          resetImageWidth(f, k);
+          keepImageHandleAnchored(scroller, before, f.getBoundingClientRect());
+          scheduleEdges();
+        };
+      })(frame, key));
+    }
+  }
+
+  // src/ui/palette.js
+  var paletteHooks = {
+    hideAsk: function() {
+    },
+    hidePeek: function() {
+    },
+    closeShare: function() {
+    },
+    closeSourcesPanel: function() {
+    },
+    hideConfirm: function() {
+    }
+  };
+  function registerPaletteHooks(hooks) {
+    Object.assign(paletteHooks, hooks || {});
+  }
+  function getPlain(node) {
+    if (node._plainFor !== node.html) {
+      var d = document.createElement("div");
+      d.innerHTML = node.html || "";
+      node._plainFor = node.html;
+      node._plain = d.textContent || "";
+    }
+    return node._plain || "";
+  }
+  var palOpen = false;
+  var palSel = 0;
+  var palItems = [];
+  var palCanvasCommands = false;
+  var palTrap = null;
+  function initPalette() {
+    paletteEl.addEventListener("mousedown", function(e) {
+      if (e.target === paletteEl) closePalette();
+    });
+    palText.addEventListener("input", function() {
+      renderPalette(palText.value);
+    });
+    palText.addEventListener("keydown", onPaletteKeydown);
+    palResults.addEventListener("click", onPaletteClick);
+    palResults.addEventListener("mousemove", onPaletteMousemove);
+  }
+  function togglePalette() {
+    if (palOpen) closePalette();
+    else openPalette();
+  }
+  function openPalette() {
+    palOpen = true;
+    palCanvasCommands = mode === "canvas";
+    paletteHooks.hideAsk();
+    paletteHooks.hidePeek();
+    paletteHooks.closeShare();
+    paletteHooks.closeSourcesPanel();
+    paletteHooks.hideConfirm();
+    paletteEl.classList.add("visible");
+    palText.value = "";
+    renderPalette("");
+    if (palTrap) palTrap();
+    palTrap = activateFocusTrap(paletteEl, { initialFocus: palText, onEscape: closePalette });
+  }
+  function closePalette() {
+    palOpen = false;
+    palCanvasCommands = false;
+    paletteEl.classList.remove("visible");
+    if (palTrap) {
+      palTrap();
+      palTrap = null;
+    }
+    palText.blur();
+  }
+  function onPaletteKeydown(e) {
+    if (e.key === "Escape") {
+      e.stopPropagation();
+      closePalette();
+    } else if (e.key === "ArrowDown") {
+      e.preventDefault();
+      movePalSel(1);
+    } else if (e.key === "ArrowUp") {
+      e.preventDefault();
+      movePalSel(-1);
+    } else if (e.key === "Enter") {
+      e.preventDefault();
+      commitPal("keyboard");
+    }
+  }
+  function renderPalette(q) {
+    var tokens = q.toLowerCase().split(/\s+/).filter(function(t2) {
+      return !!t2;
+    });
+    var scored = [];
+    for (var id in nodes) {
+      var n = nodes[id];
+      var title = (n.title || "").toLowerCase();
+      var ask2 = ((n.origin && n.origin.selected_text || "") + " " + (n.origin && n.origin.question || "")).toLowerCase();
+      var body2 = getPlain(n).toLowerCase();
+      var score = 0, ok = true;
+      for (var i2 = 0; i2 < tokens.length; i2++) {
+        var t = tokens[i2];
+        if (title.indexOf(t) !== -1) score += title.indexOf(t) === 0 ? 40 : 30;
+        else if (ask2.indexOf(t) !== -1) score += 15;
+        else if (body2.indexOf(t) !== -1) score += 5;
+        else {
+          ok = false;
+          break;
+        }
+      }
+      if (!ok) continue;
+      scored.push({ n, score });
+    }
+    scored.sort(function(a, b) {
+      return b.score - a.score || (b.n._order || 0) - (a.n._order || 0);
+    });
+    scored = scored.slice(0, 12);
+    palItems = scored.map(function(s) {
+      return { type: "node", id: s.n.id };
+    }).concat(paletteCommandItems(tokens));
+    palSel = 0;
+    if (!palItems.length) {
+      palResults.innerHTML = tokens.length ? '<div class="pal-empty">Nothing in this hole matches that.</div>' : "";
+      return;
+    }
+    var html2 = "";
+    palItems.forEach(function(item, i3) {
+      if (item.type === "command") {
+        html2 += '<div class="pal-item pal-command' + (i3 === palSel ? " sel" : "") + '" data-idx="' + i3 + '">';
+        html2 += '<div class="pal-t"><span class="pal-title">' + esc(item.name) + '</span><kbd class="pal-kbd">' + esc(item.kbd) + "</kbd></div>";
+        html2 += "</div>";
+        return;
+      }
+      var n2 = nodes[item.id];
+      if (!n2) return;
+      var badge = n2.origin && n2.origin.synthesis ? '<span class="lens-badge">\u2726 ' + (n2.origin.synthesis_mode === "question_map" ? "Question Map" : "Synthesis") + "</span>" : n2.origin && n2.origin.lens ? lensBadgeHtml(n2.origin.lens) : "";
+      var flags = n2.status === "pending" ? '<span class="pal-writing">writing\u2026</span>' : isUnread(n2) ? '<span class="pal-dot"></span>' : "";
+      html2 += '<div class="pal-item' + (i3 === palSel ? " sel" : "") + '" data-idx="' + i3 + '">';
+      html2 += '<div class="pal-t">' + flags + '<span class="pal-title">' + esc(n2.title || "Untitled") + "</span>" + badge + "</div>";
+      html2 += '<div class="pal-s">' + palSnippet(n2, tokens) + "</div>";
+      html2 += "</div>";
+    });
+    palResults.innerHTML = html2;
+  }
+  function paletteCommandItems(tokens) {
+    if (!palCanvasCommands) return [];
+    var commands = [
+      { type: "command", name: "Frame everything", kbd: "F", run: function() {
+        frameAll(true, "keyboard");
+      } },
+      { type: "command", name: "Tidy up layout", kbd: "T", run: function() {
+        tidy("keyboard");
+      } }
+    ];
+    var out = [];
+    for (var i2 = 0; i2 < commands.length; i2++) {
+      var c2 = commands[i2];
+      var name = c2.name.toLowerCase();
+      var ok = true;
+      for (var t = 0; t < tokens.length; t++) {
+        if (name.indexOf(tokens[t]) === -1) {
+          ok = false;
+          break;
+        }
+      }
+      if (ok) out.push(c2);
+    }
+    return out;
+  }
+  function palSnippet(n, tokens) {
+    var body2 = getPlain(n);
+    var lower = body2.toLowerCase();
+    for (var i2 = 0; i2 < tokens.length; i2++) {
+      var at = lower.indexOf(tokens[i2]);
+      if (at !== -1) {
+        var start = Math.max(0, at - 34);
+        var slice = (start > 0 ? "\u2026" : "") + body2.slice(start, start + 120);
+        return hiTokens(slice, tokens);
+      }
+    }
+    var quote = n.origin && n.origin.selected_text;
+    if (quote) return "\u201C" + hiTokens(truncate2(quote, 90), tokens) + "\u201D";
+    var q = n.origin && n.origin.question;
+    if (q) return hiTokens(truncate2(q, 100), tokens);
+    return esc(truncate2(body2, 100));
+  }
+  function hiTokens(text2, tokens) {
+    if (!tokens.length) return esc(text2);
+    var lower = text2.toLowerCase(), out = "", i2 = 0;
+    while (i2 < text2.length) {
+      var best = -1, bl = 0;
+      for (var t = 0; t < tokens.length; t++) {
+        var at = lower.indexOf(tokens[t], i2);
+        if (at !== -1 && (best === -1 || at < best)) {
+          best = at;
+          bl = tokens[t].length;
+        }
+      }
+      if (best === -1) {
+        out += esc(text2.slice(i2));
+        break;
+      }
+      out += esc(text2.slice(i2, best)) + "<mark>" + esc(text2.slice(best, best + bl)) + "</mark>";
+      i2 = best + bl;
+    }
+    return out;
+  }
+  function movePalSel(delta) {
+    if (!palItems.length) return;
+    palSel = Math.max(0, Math.min(palItems.length - 1, palSel + delta));
+    var items = palResults.querySelectorAll(".pal-item");
+    for (var i2 = 0; i2 < items.length; i2++) items[i2].classList.toggle("sel", i2 === palSel);
+    if (items[palSel]) items[palSel].scrollIntoView({ block: "nearest" });
+  }
+  function commitPal(source2) {
+    var item = palItems[palSel];
+    if (!item) return;
+    if (item.type === "command") {
+      item.run();
+      closePalette();
+      return;
+    }
+    var node = nodes[item.id];
+    closePalette();
+    if (node) goToNode(node, source2);
+  }
+  function onPaletteClick(e) {
+    var it = e.target.closest(".pal-item");
+    if (!it) return;
+    palSel = Number(it.dataset.idx) || 0;
+    commitPal(motionSourceFromEvent(e));
+  }
+  function onPaletteMousemove(e) {
+    var it = e.target.closest(".pal-item");
+    if (!it) return;
+    var idx = Number(it.dataset.idx) || 0;
+    if (idx !== palSel) {
+      palSel = idx;
+      var items = palResults.querySelectorAll(".pal-item");
+      for (var i2 = 0; i2 < items.length; i2++) items[i2].classList.toggle("sel", i2 === palSel);
+    }
+  }
+
+  // src/core/sources.js
+  var URL_RE = /https?:\/\/[^\s)<>'"]+/gi;
+  var PMID_RE = /(?:\bPMID\s*:?\s*|pubmed\.ncbi\.nlm\.nih\.gov\/)(\d{5,9})/gi;
+  var DOI_RE = /(?:\bDOI\s*:?\s*|https?:\/\/(?:dx\.)?doi\.org\/)(10\.\d{4,9}\/[^\s\])<>'"`]+)/gi;
+  var ARXIV_RE = /(?:\barXiv\s*:?\s*|arxiv\.org\/(?:abs|pdf)\/)(\d{4}\.\d{4,5}(?:v\d+)?|[a-z-]+\/\d{7}(?:v\d+)?)/gi;
+  function buildSourcesOverview(inputNodes) {
+    var _a2;
+    const nodeList = normalizeNodeList(inputNodes);
+    const byId = new Map(nodeList.map((node) => [node.id, node]));
+    const sources = /* @__PURE__ */ new Map();
+    const directByNode = /* @__PURE__ */ new Map();
+    for (const node of nodeList) {
+      const keys = /* @__PURE__ */ new Set();
+      const add = (source2) => {
+        if (!source2) return;
+        keys.add(source2.key);
+        upsertSource(sources, source2, node.id, "direct");
+      };
+      for (const source2 of extractSourcesFromNode(node)) add(source2);
+      directByNode.set(node.id, keys);
+    }
+    const derivedNodes = [];
+    for (const node of nodeList) {
+      const sourceIds = Array.isArray((_a2 = node.origin) == null ? void 0 : _a2.synthesis_sources) ? node.origin.synthesis_sources : [];
+      if (!sourceIds.length) continue;
+      const derivedKeys = /* @__PURE__ */ new Set();
+      for (const sourceId of sourceIds) {
+        for (const key of directByNode.get(String(sourceId)) || []) derivedKeys.add(key);
+      }
+      for (const key of derivedKeys) {
+        const source2 = sources.get(key);
+        if (source2) addUnique(source2.derived_node_ids, node.id);
+      }
+      derivedNodes.push({
+        id: node.id,
+        title: node.title,
+        source_node_ids: sourceIds.filter((id) => byId.has(String(id))).map(String),
+        source_keys: [...derivedKeys].sort()
+      });
+    }
+    const nodesWithoutSources = nodeList.filter((node) => !(directByNode.get(node.id) || /* @__PURE__ */ new Set()).size).map((node) => ({ id: node.id, title: node.title }));
+    return {
+      sources: [...sources.values()].sort(compareSources),
+      nodes_without_sources: nodesWithoutSources,
+      derived_nodes: derivedNodes
+    };
+  }
+  function extractSourcesFromNode(rawNode) {
+    const node = normalizeNode(rawNode);
+    const text2 = [node.base_url || "", node.markdown || ""].join("\n");
+    const found = /* @__PURE__ */ new Map();
+    const add = (source2) => {
+      if (source2) found.set(source2.key, source2);
+    };
+    scan(PMID_RE, text2, (match) => add(pmidSource(match[1])));
+    scan(DOI_RE, text2, (match) => add(doiSource(cleanDoi(match[1]))));
+    scan(ARXIV_RE, text2, (match) => add(arxivSource(match[1])));
+    scan(URL_RE, text2, (match) => add(urlSource(match[0])));
+    return [...found.values()].sort(compareSources);
+  }
+  function normalizeNodeList(inputNodes) {
+    const raw = Array.isArray(inputNodes) ? inputNodes : Object.values(inputNodes || {});
+    return raw.map(normalizeNode).filter((node) => node.id);
+  }
+  function normalizeNode(node) {
+    var _a2, _b;
+    return {
+      id: String((node == null ? void 0 : node.id) || ""),
+      title: String((node == null ? void 0 : node.title) || "Untitled"),
+      markdown: String((_b = (_a2 = node == null ? void 0 : node.markdown) != null ? _a2 : node == null ? void 0 : node.md) != null ? _b : ""),
+      base_url: (node == null ? void 0 : node.base_url) || null,
+      origin: (node == null ? void 0 : node.origin) || null
+    };
+  }
+  function scan(re, text2, cb) {
+    re.lastIndex = 0;
+    let match;
+    while (match = re.exec(text2)) cb(match);
+  }
+  function upsertSource(map, source2, nodeId, kind) {
+    const current = map.get(source2.key) || {
+      ...source2,
+      node_ids: [],
+      derived_node_ids: []
+    };
+    addUnique(kind === "derived" ? current.derived_node_ids : current.node_ids, nodeId);
+    map.set(source2.key, current);
+  }
+  function addUnique(list2, value) {
+    const v = String(value || "");
+    if (v && !list2.includes(v)) list2.push(v);
+  }
+  function pmidSource(value) {
+    const pmid = String(value || "").replace(/\D/g, "");
+    if (!pmid) return null;
+    return { key: `pmid:${pmid}`, type: "pmid", label: `PMID: ${pmid}`, url: `https://pubmed.ncbi.nlm.nih.gov/${pmid}/` };
+  }
+  function doiSource(value) {
+    const doi = cleanDoi(value);
+    if (!doi) return null;
+    return { key: `doi:${doi.toLowerCase()}`, type: "doi", label: `DOI: ${doi}`, url: `https://doi.org/${doi}` };
+  }
+  function arxivSource(value) {
+    const id = stripTrailing(String(value || ""));
+    if (!id) return null;
+    return { key: `arxiv:${id.toLowerCase()}`, type: "arxiv", label: `arXiv: ${id}`, url: `https://arxiv.org/abs/${id}` };
+  }
+  function urlSource(value) {
+    const url = stripTrailing(String(value || ""));
+    if (!url) return null;
+    const pmid = /pubmed\.ncbi\.nlm\.nih\.gov\/(\d{5,9})/i.exec(url);
+    if (pmid) return pmidSource(pmid[1]);
+    const doi = /(?:dx\.)?doi\.org\/(10\.\d{4,9}\/.+)/i.exec(url);
+    if (doi) return doiSource(doi[1]);
+    const arxiv = /arxiv\.org\/(?:abs|pdf)\/(\d{4}\.\d{4,5}(?:v\d+)?|[a-z-]+\/\d{7}(?:v\d+)?)/i.exec(url);
+    if (arxiv) return arxivSource(arxiv[1]);
+    return { key: `url:${url}`, type: "url", label: url.replace(/^https?:\/\//, ""), url };
+  }
+  function cleanDoi(value) {
+    return stripTrailing(String(value || "").replace(/^https?:\/\/(?:dx\.)?doi\.org\//i, ""));
+  }
+  function stripTrailing(value) {
+    return String(value || "").trim().replace(/[.,;:!?]+$/g, "").replace(/\)+$/g, "");
+  }
+  function compareSources(a, b) {
+    return `${a.type}:${a.label}`.localeCompare(`${b.type}:${b.label}`);
+  }
+
+  // src/ui/sources-panel.js
+  var panel = null;
+  var body = null;
+  var open2 = false;
+  var releaseTrap = null;
+  function initSourcesPanel() {
+    panel = document.getElementById("sources-panel");
+    body = document.getElementById("sources-body");
+    document.getElementById("r-sources").addEventListener("click", function(e) {
+      toggleSourcesPanel(motionSourceFromEvent(e));
+    });
+    document.getElementById("t-sources").addEventListener("click", function(e) {
+      toggleSourcesPanel(motionSourceFromEvent(e));
+    });
+    document.getElementById("sources-close").addEventListener("click", closeSourcesPanel);
+    panel.addEventListener("click", onPanelClick);
+  }
+  function closeSourcesPanel() {
+    open2 = false;
+    if (panel) {
+      panel.classList.remove("visible");
+      panel.setAttribute("aria-hidden", "true");
+    }
+    if (releaseTrap) {
+      releaseTrap();
+      releaseTrap = null;
+    }
+  }
+  function toggleSourcesPanel(source2) {
+    if (open2) {
+      closeSourcesPanel();
+      return;
+    }
+    renderSourcesPanel(source2);
+    open2 = true;
+    panel.classList.add("visible");
+    panel.setAttribute("aria-hidden", "false");
+    if (releaseTrap) releaseTrap();
+    releaseTrap = activateFocusTrap(panel, { initialFocus: panel.querySelector("button"), onEscape: closeSourcesPanel });
+  }
+  function renderSourcesPanel(source2) {
+    var overview = buildSourcesOverview(nodes);
+    var html2 = "";
+    html2 += renderSources(overview.sources);
+    html2 += renderDerived(overview.derived_nodes);
+    html2 += renderUnsourced(overview.nodes_without_sources);
+    body.innerHTML = html2 || '<div class="sources-empty">No nodes yet.</div>';
+    body.dataset.source = source2 || "pointer";
+  }
+  function renderSources(sources) {
+    if (!sources.length) return '<div class="sources-section"><h4>Sources</h4><div class="sources-empty">No explicit sources found yet. Add PMID, DOI, arXiv, URLs, markdown links, or node base_url values.</div></div>';
+    var html2 = '<div class="sources-section"><h4>Sources (' + sources.length + ")</h4>";
+    for (var i2 = 0; i2 < sources.length; i2++) {
+      var source2 = sources[i2];
+      var direct = source2.node_ids || [];
+      var derived = source2.derived_node_ids || [];
+      html2 += '<div class="source-card">';
+      html2 += '<div class="source-main"><span class="source-type">' + esc(source2.type) + "</span>";
+      html2 += source2.url ? '<a class="source-label source-link" href="' + esc(source2.url) + '" target="_blank" rel="noreferrer">' + esc(source2.label) + "</a>" : '<span class="source-label">' + esc(source2.label) + "</span>";
+      html2 += "</div>";
+      html2 += '<div class="source-meta">Used directly by ' + direct.length + " node" + (direct.length === 1 ? "" : "s") + (derived.length ? ", inherited by " + derived.length + " derived node" + (derived.length === 1 ? "" : "s") : "") + ".</div>";
+      html2 += nodeButtons(direct, "Direct") + nodeButtons(derived, "Derived");
+      html2 += "</div>";
+    }
+    return html2 + "</div>";
+  }
+  function renderDerived(derived) {
+    if (!derived.length) return "";
+    var html2 = '<div class="sources-section"><h4>Derived Nodes</h4>';
+    for (var i2 = 0; i2 < derived.length; i2++) {
+      var node = derived[i2];
+      html2 += '<div class="source-node-card">';
+      html2 += '<button class="source-node" data-node="' + esc(node.id) + '">' + esc(truncate2(node.title || "Untitled", 54)) + "</button>";
+      html2 += '<div class="source-meta">Derived from ' + node.source_node_ids.length + " selected node" + (node.source_node_ids.length === 1 ? "" : "s") + " and " + node.source_keys.length + " source" + (node.source_keys.length === 1 ? "" : "s") + ".</div>";
+      html2 += nodeButtons(node.source_node_ids, "Source nodes");
+      html2 += "</div>";
+    }
+    return html2 + "</div>";
+  }
+  function renderUnsourced(nodesWithoutSources) {
+    if (!nodesWithoutSources.length) return "";
+    var html2 = '<div class="sources-section"><h4>No Explicit Sources (' + nodesWithoutSources.length + ")</h4>";
+    html2 += '<div class="source-node-list">';
+    for (var i2 = 0; i2 < nodesWithoutSources.length; i2++) {
+      var node = nodesWithoutSources[i2];
+      html2 += '<button class="source-node" data-node="' + esc(node.id) + '">' + esc(truncate2(node.title || "Untitled", 42)) + "</button>";
+    }
+    return html2 + "</div></div>";
+  }
+  function nodeButtons(ids, label) {
+    if (!ids || !ids.length) return "";
+    var html2 = '<div class="source-meta">' + esc(label) + '</div><div class="source-node-list">';
+    for (var i2 = 0; i2 < ids.length; i2++) {
+      var node = nodes[ids[i2]];
+      if (!node) continue;
+      html2 += '<button class="source-node" data-node="' + esc(node.id) + '">' + esc(truncate2(node.title || "Untitled", 42)) + "</button>";
+    }
+    return html2 + "</div>";
+  }
+  function onPanelClick(e) {
+    var btn = e.target.closest && e.target.closest("button[data-node]");
+    if (!btn) return;
+    var node = nodes[btn.dataset.node];
+    if (!node) {
+      flashHint("That node is no longer available.");
+      return;
+    }
+    closeSourcesPanel();
+    goToNode(node, body.dataset.source || "pointer");
+  }
+
+  // src/core/html/shell.js
+  var CANVAS_SHELL = `
+<div id="reader">
+  <div id="reader-top">
+    <div id="breadcrumb"></div>
+    <button class="activity" id="act-reader" title="Jump to it" aria-label="Jump to active answer"></button>
+    <button class="tool-btn" id="r-textdown" title="Smaller text">A\u2212</button>
+    <button class="tool-btn" id="r-textup" title="Larger text">A+</button>
+    <button class="tool-btn" id="r-canvas" title="Open the spatial canvas">\u2922 Canvas</button>
+    <button class="tool-btn" id="r-sources" title="Show sources overview">Sources</button>
+    <button class="tool-btn" id="r-share" title="Share, export, synthesize">\u2197 Share</button>
+    <button class="tool-btn" id="r-theme" title="Toggle theme" aria-label="Toggle theme">\u25D1</button>
+    <button class="tool-btn" id="r-done" title="End the session (the hole stays saved)">Done</button>
+  </div>
+  <div id="since"><span class="since-dot"></span><span class="since-msg" id="since-msg"></span><button class="tool-btn" id="since-show">Show me</button><button id="since-x" title="Dismiss" aria-label="Dismiss activity notice">\xD7</button></div>
+  <div id="reader-cols">
+    <div id="reader-center">
+      <div id="reader-main"></div>
+      <div id="composer">
+        <div class="composer-inner" id="composer-inner">
+          <textarea id="composer-text" rows="1" placeholder="Ask a follow-up about this document\u2026"></textarea>
+          <button id="composer-send" class="send-btn" title="Send (\u21B5)" aria-label="Send follow-up" disabled><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 12.8V3.6M8 3.6 3.9 7.7M8 3.6l4.1 4.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+        </div>
+      </div>
+    </div>
+    <div id="reader-side"></div>
+  </div>
+</div>
+
+<div id="viewport"><div id="world"><svg id="edges"></svg></div></div>
+<div id="toolbar">
+  <button class="tool-btn" id="t-reader" title="Back to reading"><svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" aria-hidden="true"><path d="M3.75 3.25h4.5c1 0 1.8.8 1.8 1.8v7.7H5.15c-.77 0-1.4-.63-1.4-1.4z"/><path d="M5.15 12.75c-.77 0-1.4-.63-1.4-1.4s.63-1.4 1.4-1.4h4.9"/></svg>Reader</button>
+  <span class="sep"></span>
+  <button class="tool-btn tool-icon" id="t-zout" title="Zoom out" aria-label="Zoom out">\u2212</button>
+  <button class="tool-btn" id="zoom-label" title="Zoom to 100%" aria-label="Zoom to 100%">100%</button>
+  <button class="tool-btn tool-icon" id="t-zin" title="Zoom in" aria-label="Zoom in">+</button>
+  <button class="tool-btn tool-icon" id="t-frame" title="Frame everything \xB7 F" aria-label="Frame everything \xB7 F"><svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" aria-hidden="true"><path d="M5.8 3.25H3.25V5.8"/><path d="M10.2 3.25h2.55V5.8"/><path d="M12.75 10.2v2.55H10.2"/><path d="M5.8 12.75H3.25V10.2"/></svg></button>
+  <span class="sep"></span>
+  <button class="tool-btn tool-icon" id="t-tidy" title="Tidy up layout \xB7 T" aria-label="Tidy up layout \xB7 T"><svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" fill="none" aria-hidden="true"><rect x="6.25" y="2.5" width="3.5" height="2.75" rx="0.7"/><rect x="2.75" y="10.75" width="3.5" height="2.75" rx="0.7"/><rect x="9.75" y="10.75" width="3.5" height="2.75" rx="0.7"/><path d="M8 5.25v2.25"/><path d="M4.5 7.5h7"/><path d="M4.5 7.5v3.25"/><path d="M11.5 7.5v3.25"/></svg></button>
+  <button class="tool-btn" id="t-synth-prompt" title="Synthesize selected nodes" disabled>\u25EB Synthesize <span id="t-synth-count">0</span></button>
+  <span class="sep"></span>
+  <button class="tool-btn" id="t-sources" title="Show sources overview">Sources</button>
+  <button class="tool-btn tool-icon" id="t-share" title="Share, export, synthesize" aria-label="Share, export, synthesize">\u2197</button>
+  <button class="tool-btn tool-icon" id="t-theme" title="Toggle theme" aria-label="Toggle theme">\u25D1</button>
+  <span class="sep" id="act-sep" style="display:none"></span>
+  <button class="activity" id="act-canvas" title="Jump to it" aria-label="Jump to active answer"></button>
+</div>
+
+<div id="ask">
+  <div class="ask-input">
+    <textarea id="ask-text" rows="1" placeholder="Ask about this\u2026 \u21B5 = Explain"></textarea>
+    <button class="send-btn" id="ask-go" title="Ask (\u21B5)" aria-label="Ask"><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 12.8V3.6M8 3.6 3.9 7.7M8 3.6l4.1 4.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button>
+  </div>
+  <div class="ask-lenses" id="ask-lenses">
+    <button class="lens" data-lens="explain">Explain <kbd>1</kbd></button>
+    <button class="lens" data-lens="eli5">ELI5 <kbd>2</kbd></button>
+    <button class="lens" data-lens="example">Example <kbd>3</kbd></button>
+    <button class="lens" data-lens="deeper">Go Deeper <kbd>4</kbd></button>
+  </div>
+</div>
+
+<div id="synth-panel">
+  <div class="synth-head"><span>Selected synthesis</span><button id="synth-close" title="Close" aria-label="Close">\xD7</button></div>
+  <div class="synth-meta"><span id="synth-count">0</span> selected nodes will be used as sources.</div>
+  <label class="synth-mode-label" for="synth-mode">Output</label>
+  <select id="synth-mode">
+    <option value="synthesis">Synthesis</option>
+    <option value="question_map">Question Map</option>
+  </select>
+  <textarea id="synth-text" rows="3" placeholder="What should the synthesis focus on? e.g. Turn these nodes into one thesis architecture proposal, keep tradeoffs and next steps."></textarea>
+  <div class="synth-actions"><button class="tool-btn" id="synth-cancel">Cancel</button><button class="send-btn" id="synth-send" title="Create synthesis" aria-label="Create synthesis" disabled><svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><path d="M8 12.8V3.6M8 3.6 3.9 7.7M8 3.6l4.1 4.1" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></button></div>
+</div>
+
+<div id="palette"><div id="palette-panel">
+  <div class="pal-input">
+    <svg width="14" height="14" viewBox="0 0 16 16" fill="none" aria-hidden="true"><circle cx="7" cy="7" r="4.6" stroke="currentColor" stroke-width="1.5"/><path d="M10.5 10.5 14 14" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/></svg>
+    <input id="pal-text" placeholder="Search this Rabbithole\u2026" autocomplete="off" spellcheck="false">
+    <kbd>esc</kbd>
+  </div>
+  <div id="pal-results"></div>
+</div></div>
+
+<div id="peek"></div>
+
+<div id="sources-panel" aria-hidden="true">
+  <div class="sources-head"><span>Sources</span><button id="sources-close" title="Close" aria-label="Close">\xD7</button></div>
+  <div class="sources-body" id="sources-body"></div>
+</div>
+
+<div id="sharemenu">
+  <button class="sm-item" id="sm-trail"><span class="sm-ic">\u2937</span>Copy trail as Markdown</button>
+  <button class="sm-item" id="sm-doc"><span class="sm-ic">\u29C9</span>Copy document as Markdown</button>
+  <div class="sm-sep"></div>
+  <button class="sm-item" id="sm-export"><span class="sm-ic">\u21E9</span>Download snapshot (.html)</button>
+  <button class="sm-item" id="sm-json"><span class="sm-ic">{}</span>Download session JSON (.json)</button>
+  <button class="sm-item" id="sm-portable"><span class="sm-ic">\u21E3</span>Export Rabbithole (.rabbithole)</button>
+  <div class="sm-sep" id="sm-sep2"></div>
+  <button class="sm-item" id="sm-synth-selected"><span class="sm-ic">\u25EB</span>Synthesize selected nodes</button>
+  <button class="sm-item" id="sm-synth"><span class="sm-ic">\u2726</span>Synthesize this journey</button>
+</div>
+
+<div id="confirm">
+  <div class="cf-msg" id="cf-msg"></div>
+  <div class="cf-row"><button id="cf-keep">Keep</button><button class="cf-remove" id="cf-remove">Remove</button></div>
+</div>
+
+<div id="banner"><div class="banner-body"><span class="banner-title" id="banner-title"></span><span id="banner-msg"></span></div><button id="banner-x" title="Dismiss" aria-label="Dismiss banner">\xD7</button></div>
+<div id="hint"></div>
+`;
+
+  // src/ui/snapshot.js
+  var ASSET_REF_RE = /asset:([a-z0-9][a-z0-9_-]*\.(?:png|jpe?g|gif|webp|svg))/gi;
+  var snapshotHooks = {
+    fetchAssetData: null,
+    getFrozenClientSource: null,
+    getDompurifySource: null
+  };
+  function escapeHtml2(str) {
+    return String(str != null ? str : "").replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+  }
+  function serializeForInlineScript(value) {
+    return JSON.stringify(value).replace(/</g, "\\u003c").replace(/>/g, "\\u003e").replace(/&/g, "\\u0026").replace(/\u2028/g, "\\u2028").replace(/\u2029/g, "\\u2029");
+  }
+  function snapshotViewState() {
+    var cur = nodes[currentNodeId];
+    var scroll = mode === "reader" ? readerMain.scrollTop : cur && cur._scrollTop || 0;
+    return {
+      mode,
+      node_id: currentNodeId,
+      scroll,
+      view: { x: view.x, y: view.y, scale: view.scale }
+    };
+  }
+  function serializeSnapshotNodes() {
+    return Object.keys(nodes).map(function(id) {
+      var n = nodes[id];
+      return {
+        id: n.id,
+        parent_id: n.parent_id || null,
+        title: n.title || "",
+        markdown: n.md || "",
+        base_url: n.base_url || null,
+        base_url_source: n.base_url_source || null,
+        origin: n.origin || null,
+        position: { x: n.x || 0, y: n.y || 0 },
+        size: { w: n.w, h: n.h },
+        font_scale: n.font_scale || 1,
+        collapsed: !!n.collapsed,
+        status: n.status || "answered",
+        read: !!n.read
+      };
+    });
+  }
+  function collectAssetNames(snapshotNodes) {
+    var names = {};
+    snapshotNodes.forEach(function(node) {
+      var source2 = String(node.markdown || "");
+      var match;
+      ASSET_REF_RE.lastIndex = 0;
+      while (match = ASSET_REF_RE.exec(source2)) names[match[1]] = true;
+    });
+    return Object.keys(names).sort();
+  }
+  function blobToDataUrl(blob) {
+    return new Promise(function(resolve) {
+      var reader = new FileReader();
+      reader.onload = function() {
+        resolve(String(reader.result || "data:,"));
+      };
+      reader.onerror = function() {
+        resolve("data:,");
+      };
+      reader.readAsDataURL(blob);
+    });
+  }
+  async function fetchAssetData(name) {
+    if (typeof snapshotHooks.fetchAssetData === "function") {
+      try {
+        var hooked = await snapshotHooks.fetchAssetData(name);
+        if (hooked) return hooked;
+      } catch (e) {
+      }
+    }
+    try {
+      var slash = String.fromCharCode(47);
+      var res = await fetch(slash + "assets" + slash + name, { cache: "no-store" });
+      if (!res.ok) return "data:,";
+      return await blobToDataUrl(await res.blob());
+    } catch (e) {
+      return "data:,";
+    }
+  }
+  async function buildAssetData(snapshotNodes) {
+    var out = {};
+    var names = collectAssetNames(snapshotNodes);
+    for (var i2 = 0; i2 < names.length; i2++) out[names[i2]] = await fetchAssetData(names[i2]);
+    return out;
+  }
+  function extractDompurifySource() {
+    if (typeof snapshotHooks.getDompurifySource === "function") {
+      return snapshotHooks.getDompurifySource() || "";
+    }
+    var script2 = document.scripts && document.scripts[0] ? document.scripts[0].textContent || "" : "";
+    var marker = "\n(function(){";
+    var idx = script2.indexOf(marker);
+    return idx === -1 ? "" : script2.slice(0, idx);
+  }
+  async function buildSnapshotHydration() {
+    var snapshotNodes = serializeSnapshotNodes();
+    return {
+      session_id: hydration.session_id || null,
+      hole_id: hydration.hole_id || null,
+      title: hydration.title || "Rabbithole",
+      root_id: rootId,
+      last_event_id: 0,
+      agent_attached: false,
+      view_state: snapshotViewState(),
+      frozen: true,
+      asset_data: await buildAssetData(snapshotNodes),
+      nodes: snapshotNodes
+    };
+  }
+  function buildSnapshotHtml(snapshotHydration) {
+    var _a2;
+    var title = snapshotHydration && snapshotHydration.title || "Rabbithole";
+    var styleText = ((_a2 = document.querySelector("style")) == null ? void 0 : _a2.textContent) || "";
+    var dompurifySource = extractDompurifySource();
+    var frozenClient = typeof snapshotHooks.getFrozenClientSource === "function" ? snapshotHooks.getFrozenClientSource() : window.__RABBITHOLE_FROZEN_CLIENT__;
+    if (!frozenClient) throw new Error("Frozen client bundle is unavailable");
+    var lt = String.fromCharCode(60);
+    var gt = String.fromCharCode(62);
+    var scriptOpen = lt + "script" + gt;
+    var scriptClose = lt + String.fromCharCode(47) + "script" + gt;
+    return '<!DOCTYPE html>\n<html lang="en" data-theme="light">\n<head>\n<meta charset="utf-8">\n<meta name="viewport" content="width=device-width, initial-scale=1">\n<title>' + escapeHtml2(title) + "</title>\n<style>\n" + styleText + "\n</style>\n</head>\n<body>\n" + CANVAS_SHELL + "\n" + scriptOpen + "\n" + dompurifySource + '\n(function(){\n  "use strict";\n  var hydration = ' + serializeForInlineScript(snapshotHydration) + ";\n" + frozenClient + "\n  RabbitholeFrozenClient.startRabbithole(hydration);\n})();\n" + scriptClose + "\n</body>\n</html>";
+  }
+  function exportFilename(title) {
+    var slug = String(title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+    return "rabbithole-" + (slug || "export") + ".html";
+  }
+  function exportJsonFilename(title) {
+    var slug = String(title || "").toLowerCase().replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "").slice(0, 60);
+    return "rabbithole-" + (slug || "export") + ".json";
+  }
+  function buildSnapshotJson(snapshotHydration) {
+    return {
+      format: "rabbithole-session-json",
+      format_version: 1,
+      exported_at: (/* @__PURE__ */ new Date()).toISOString(),
+      session: snapshotHydration
+    };
+  }
+  async function downloadSnapshot() {
+    var snapshotHydration = await buildSnapshotHydration();
+    var html2 = buildSnapshotHtml(snapshotHydration);
+    var blob = new Blob([html2], { type: "text/html;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = exportFilename(snapshotHydration.title);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() {
+      URL.revokeObjectURL(url);
+    }, 3e4);
+    return html2;
+  }
+  async function downloadSnapshotJson() {
+    var snapshotHydration = await buildSnapshotHydration();
+    var payload = buildSnapshotJson(snapshotHydration);
+    var json2 = JSON.stringify(payload, null, 2) + "\n";
+    var blob = new Blob([json2], { type: "application/json;charset=utf-8" });
+    var url = URL.createObjectURL(blob);
+    var a = document.createElement("a");
+    a.href = url;
+    a.download = exportJsonFilename(snapshotHydration.title);
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    setTimeout(function() {
+      URL.revokeObjectURL(url);
+    }, 3e4);
+    return payload;
+  }
+
+  // src/ui/branch-surfaces.js
+  var branchHooks = {
+    post: function() {
+      return Promise.resolve({ ok: true });
+    },
+    exportPortable: null
+  };
+  function registerBranchHooks(hooks) {
+    Object.assign(branchHooks, hooks || {});
+  }
+  var peekTimer = 0;
+  var peekFor = null;
+  function initBranchSurfaces() {
+    readerMain.addEventListener("mouseover", onReaderMarkMouseover);
+    readerMain.addEventListener("mouseout", onReaderMarkMouseout);
+    peekEl.addEventListener("mouseleave", function() {
+      hidePeek();
+    });
+    peekEl.addEventListener("click", function() {
+      var kid = peekFor && nodes[peekFor];
+      hidePeek();
+      if (kid) openNode(kid.id);
+    });
+    document.getElementById("r-share").addEventListener("click", function(e) {
+      e.stopPropagation();
+      toggleShare(e.currentTarget);
+    });
+    document.getElementById("t-share").addEventListener("click", function(e) {
+      e.stopPropagation();
+      toggleShare(e.currentTarget);
+    });
+    document.getElementById("t-synth-prompt").addEventListener("click", function(e) {
+      openSynthesisPrompt(motionSourceFromEvent(e));
+    });
+    document.getElementById("synth-send").addEventListener("click", function(e) {
+      submitSelectedSynthesis(motionSourceFromEvent(e));
+    });
+    document.getElementById("synth-cancel").addEventListener("click", closeSynthesisPrompt);
+    document.getElementById("synth-close").addEventListener("click", closeSynthesisPrompt);
+    document.getElementById("synth-text").addEventListener("input", updateSynthesisPromptState);
+    document.getElementById("synth-mode").addEventListener("change", updateSynthesisModeCopy);
+    document.getElementById("synth-text").addEventListener("keydown", function(e) {
+      if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
+        e.preventDefault();
+        submitSelectedSynthesis("keyboard");
+      } else if (e.key === "Escape") {
+        closeSynthesisPrompt();
+      }
+    });
+    document.addEventListener("rh-selection-change", updateSelectedSynthesisUi);
+    document.getElementById("sm-doc").addEventListener("click", onCopyDoc);
+    document.getElementById("sm-trail").addEventListener("click", onCopyTrail);
+    document.getElementById("sm-export").addEventListener("click", onExportSnapshot);
+    document.getElementById("sm-json").addEventListener("click", onExportSnapshotJson);
+    document.getElementById("sm-portable").addEventListener("click", onExportPortable);
+    document.getElementById("sm-synth-selected").addEventListener("click", function(e) {
+      closeShare();
+      openSynthesisPrompt(motionSourceFromEvent(e));
+    });
+    document.getElementById("sm-synth").addEventListener("click", function(e) {
+      closeShare();
+      synthesize(motionSourceFromEvent(e));
+    });
+    document.getElementById("cf-keep").addEventListener("click", hideConfirm);
+    document.getElementById("cf-remove").addEventListener("click", function() {
+      var node = confirmFor && nodes[confirmFor];
+      hideConfirm();
+      if (node) deleteBranch(node);
+    });
+    updateSelectedSynthesisUi();
+  }
+  function hidePeek() {
+    if (peekTimer) {
+      clearTimeout(peekTimer);
+      peekTimer = 0;
+    }
+    peekFor = null;
+    peekEl.classList.remove("visible");
+  }
+  function showPeek(mark) {
+    var kid = nodes[mark.dataset.child];
+    if (!kid || kid.status !== "answered") return;
+    peekFor = kid.id;
+    var badge = kid.origin && kid.origin.synthesis ? '<span class="lens-badge">\u2726 ' + (kid.origin.synthesis_mode === "question_map" ? "Question Map" : "Synthesis") + "</span>" : kid.origin && kid.origin.lens ? lensBadgeHtml(kid.origin.lens) : "";
+    peekEl.innerHTML = '<div class="peek-title">' + (isUnread(kid) ? '<span class="pal-dot"></span>' : "") + "<span>" + esc(kid.title || "Untitled") + "</span>" + badge + '</div><div class="peek-body md">' + (kid.html || "") + '</div><div class="peek-hint">Click to open</div>';
+    if (typeof mountVisuals === "function") {
+      var peekBody = peekEl.querySelector(".peek-body");
+      if (peekBody) mountVisuals(peekBody, "peek:" + kid.id);
+    }
+    var r2 = mark.getBoundingClientRect();
+    var top = r2.bottom + 8;
+    if (top + peekEl.offsetHeight + 10 > window.innerHeight) top = Math.max(10, r2.top - peekEl.offsetHeight - 8);
+    peekEl.style.left = Math.min(window.innerWidth - 360, Math.max(10, r2.left)) + "px";
+    peekEl.style.top = top + "px";
+    peekEl.classList.add("visible");
+    setSurfaceOrigin(peekEl, r2);
+  }
+  function onReaderMarkMouseover(e) {
+    var m = e.target.closest && e.target.closest("mark[data-child]");
+    if (!m) return;
+    var kid = nodes[m.dataset.child];
+    if (!kid || kid.status !== "answered") return;
+    if (peekTimer) clearTimeout(peekTimer);
+    peekTimer = setTimeout(function() {
+      peekTimer = 0;
+      showPeek(m);
+    }, 220);
+  }
+  function onReaderMarkMouseout(e) {
+    var m = e.target.closest && e.target.closest("mark[data-child]");
+    if (!m) return;
+    if (peekTimer) {
+      clearTimeout(peekTimer);
+      peekTimer = 0;
+    }
+    setTimeout(function() {
+      if (!peekEl.matches(":hover") && !readerMain.querySelector("mark[data-child]:hover")) hidePeek();
+    }, 80);
+  }
+  var shareOpen = false;
+  var shareTrap = null;
+  function toggleShare(anchor) {
+    if (shareOpen) {
+      closeShare();
+      return;
+    }
+    var noAgent = frozen || closed;
+    document.getElementById("sm-export").style.display = frozen ? "none" : "";
+    document.getElementById("sm-json").style.display = frozen ? "none" : "";
+    document.getElementById("sm-portable").style.display = !frozen && typeof branchHooks.exportPortable === "function" ? "" : "none";
+    var selected = selectedCanvasNodes();
+    document.getElementById("sm-sep2").style.display = noAgent ? "none" : "";
+    document.getElementById("sm-synth-selected").style.display = noAgent ? "none" : "";
+    document.getElementById("sm-synth-selected").disabled = selected.length < 2;
+    document.getElementById("sm-synth-selected").querySelector(".sm-ic").textContent = selected.length >= 2 ? String(selected.length) : "\u25EB";
+    document.getElementById("sm-synth").style.display = noAgent ? "none" : "";
+    var r2 = anchor.getBoundingClientRect();
+    shareMenu.style.left = Math.min(window.innerWidth - shareMenu.offsetWidth - 10, Math.max(10, r2.right - shareMenu.offsetWidth)) + "px";
+    shareMenu.style.top = r2.bottom + 8 + "px";
+    shareOpen = true;
+    shareMenu.classList.add("visible");
+    setSurfaceOrigin(shareMenu, r2);
+    if (shareTrap) shareTrap();
+    shareTrap = activateFocusTrap(shareMenu, {
+      initialFocus: shareMenu.querySelector("button"),
+      onEscape: closeShare
+    });
+  }
+  function closeShare() {
+    shareOpen = false;
+    shareMenu.classList.remove("visible");
+    if (shareTrap) {
+      shareTrap();
+      shareTrap = null;
+    }
+  }
+  function copyText(text2, okMsg) {
+    function done() {
+      flashHint(okMsg);
+    }
+    function legacy() {
+      var ta = document.createElement("textarea");
+      ta.value = text2;
+      ta.style.position = "fixed";
+      ta.style.opacity = "0";
+      document.body.appendChild(ta);
+      ta.select();
+      try {
+        document.execCommand("copy");
+      } catch (err) {
+      }
+      document.body.removeChild(ta);
+    }
+    if (navigator.clipboard && navigator.clipboard.writeText) {
+      navigator.clipboard.writeText(text2).then(done, function() {
+        legacy();
+        done();
+      });
+    } else {
+      legacy();
+      done();
+    }
+  }
+  function originLine(n) {
+    if (!n.origin) return "";
+    if (n.origin.synthesis) return n.origin.synthesis_mode === "question_map" ? "> \u2726 Question Map from selected nodes\n\n" : "> \u2726 Synthesis from selected nodes\n\n";
+    var ask2 = n.origin.lens ? lensLabel2(n.origin.lens) : n.origin.question || "";
+    if (n.origin.selected_text) return "> Asked about: \u201C" + n.origin.selected_text + "\u201D" + (ask2 ? " \u2014 " + ask2 : "") + "\n\n";
+    return ask2 ? "> Follow-up \u2014 " + ask2 + "\n\n" : "";
+  }
+  function docMarkdown(n, depth) {
+    var h = "#";
+    for (var i2 = 0; i2 < Math.min(depth, 3); i2++) h += "#";
+    var body2 = (n.md || "").trim() || "_(still being written)_";
+    return h + " " + (n.title || "Untitled") + "\n\n" + originLine(n) + body2 + "\n";
+  }
+  function trailMarkdown(id) {
+    var path2 = lineageNodes(id), parts = [];
+    for (var i2 = 0; i2 < path2.length; i2++) parts.push(docMarkdown(path2[i2], i2));
+    return parts.join("\n---\n\n");
+  }
+  function onCopyDoc() {
+    closeShare();
+    var n = nodes[currentNodeId];
+    if (!n) return;
+    copyText(docMarkdown(n, 0), "Copied \u201C" + truncate2(n.title || "Untitled", 40) + "\u201D as Markdown");
+  }
+  function onCopyTrail() {
+    closeShare();
+    var path2 = lineageNodes(currentNodeId);
+    copyText(trailMarkdown(currentNodeId), path2.length === 1 ? "Copied this document as Markdown" : "Copied the trail \u2014 " + path2.length + " documents");
+  }
+  function onExportSnapshot() {
+    closeShare();
+    flashHint("Preparing snapshot...");
+    downloadSnapshot().then(function() {
+      flashHint("Snapshot downloading \u2014 a single file that opens anywhere.");
+    }, function() {
+      flashHint("Couldn't prepare the snapshot.");
+    });
+  }
+  function onExportSnapshotJson() {
+    closeShare();
+    flashHint("Preparing session JSON...");
+    downloadSnapshotJson().then(function() {
+      flashHint("Session JSON downloading.");
+    }, function() {
+      flashHint("Couldn't prepare the session JSON.");
+    });
+  }
+  function onExportPortable() {
+    closeShare();
+    if (typeof branchHooks.exportPortable !== "function") {
+      flashHint("Rabbithole export is only available in the web app.");
+      return;
+    }
+    flashHint("Preparing Rabbithole export...");
+    Promise.resolve().then(function() {
+      return branchHooks.exportPortable();
+    }).then(function(result) {
+      var name = result && result.filename ? " " + result.filename : "";
+      flashHint("Rabbithole export downloading." + name);
+    }, function() {
+      flashHint("Couldn't prepare the Rabbithole export.");
+    });
+  }
+  function synthesize(source2) {
+    if (closed) {
+      flashHint("Session ended \u2014 reopen this Rabbithole from your terminal first.");
+      return;
+    }
+    var root = nodes[rootId];
+    if (!root) return;
+    for (var k in nodes) {
+      var n = nodes[k];
+      if (n.status === "pending" && n.origin && n.origin.synthesis) {
+        flashHint("A synthesis is already being written\u2026");
+        goToNode(n, source2);
+        return;
+      }
+    }
+    var q = "Step back and write the synthesis of this whole Rabbithole so far: the key ideas we explored, how they connect, and the takeaways worth keeping. Make it a standalone summary of the journey.";
+    var kid = sendFollowup(root, q, null, true);
+    if (mode === "canvas") revealNode(kid, source2);
+    flashHint("\u2726 Synthesizing this journey \u2014 it will appear as a branch of the root document.");
+  }
+  function hasPendingSynthesis() {
+    for (var k in nodes) {
+      var n = nodes[k];
+      if (n.status === "pending" && n.origin && n.origin.synthesis) return n;
+    }
+    return null;
+  }
+  function updateSelectedSynthesisUi() {
+    var selected = selectedCanvasNodes();
+    var btn = document.getElementById("t-synth-prompt");
+    var count = document.getElementById("t-synth-count");
+    if (count) count.textContent = String(selected.length);
+    if (btn) btn.disabled = closed || selected.length < 2;
+    var panel2 = document.getElementById("synth-panel");
+    if (panel2 && panel2.classList.contains("visible")) {
+      var sc = document.getElementById("synth-count");
+      if (sc) sc.textContent = String(selected.length);
+      updateSynthesisPromptState();
+      if (selected.length < 2) closeSynthesisPrompt();
+    }
+  }
+  function openSynthesisPrompt(source2) {
+    if (closed) {
+      flashHint("Session ended \u2014 reopen this Rabbithole from your terminal first.");
+      return;
+    }
+    var selected = selectedCanvasNodes();
+    if (selected.length < 2) {
+      flashHint("Select at least two nodes on the canvas first.");
+      return;
+    }
+    var pending = hasPendingSynthesis();
+    if (pending) {
+      flashHint("A synthesis is already being written\u2026");
+      goToNode(pending, source2);
+      return;
+    }
+    var panel2 = document.getElementById("synth-panel");
+    var count = document.getElementById("synth-count");
+    var text2 = document.getElementById("synth-text");
+    var modeSelect = document.getElementById("synth-mode");
+    if (count) count.textContent = String(selected.length);
+    if (modeSelect && !modeSelect.value) modeSelect.value = "synthesis";
+    updateSynthesisModeCopy();
+    if (text2 && !text2.value.trim()) text2.value = defaultSynthesisPrompt(synthesisMode());
+    panel2.classList.add("visible");
+    updateSynthesisPromptState();
+    if (text2) text2.focus();
+  }
+  function closeSynthesisPrompt() {
+    var panel2 = document.getElementById("synth-panel");
+    if (panel2) panel2.classList.remove("visible");
+  }
+  function updateSynthesisPromptState() {
+    var selected = selectedCanvasNodes();
+    var text2 = document.getElementById("synth-text");
+    var send = document.getElementById("synth-send");
+    if (send) send.disabled = selected.length < 2 || !text2 || !text2.value.trim();
+  }
+  function synthesisMode() {
+    var modeSelect = document.getElementById("synth-mode");
+    return modeSelect && modeSelect.value === "question_map" ? "question_map" : "synthesis";
+  }
+  function defaultSynthesisPrompt(mode2) {
+    if (mode2 === "question_map") return "Map what these nodes answer, what remains unclear, and which next branches should be opened to close the gaps.";
+    return "Synthesize only these nodes: connect them into one coherent argument, remove repetition, and close with practical next steps.";
+  }
+  function updateSynthesisModeCopy() {
+    var text2 = document.getElementById("synth-text");
+    var mode2 = synthesisMode();
+    if (text2) {
+      text2.placeholder = mode2 === "question_map" ? "What should this question map focus on? e.g. Find gaps, tensions, and next branches for this research direction." : "What should the synthesis focus on? e.g. Turn these nodes into one thesis architecture proposal, keep tradeoffs and next steps.";
+      var value = text2.value.trim();
+      if (!value || value === defaultSynthesisPrompt("synthesis") || value === defaultSynthesisPrompt("question_map")) text2.value = defaultSynthesisPrompt(mode2);
+    }
+    var send = document.getElementById("synth-send");
+    if (send) send.title = mode2 === "question_map" ? "Create question map" : "Create synthesis";
+    updateSynthesisPromptState();
+  }
+  function submitSelectedSynthesis(source2) {
+    var text2 = document.getElementById("synth-text");
+    var prompt = text2 ? text2.value.trim() : "";
+    if (!prompt) {
+      updateSynthesisPromptState();
+      return;
+    }
+    synthesizeSelected(source2, prompt, synthesisMode());
+    closeSynthesisPrompt();
+    if (text2) text2.value = "";
+  }
+  function selectedNodeMarkdown(n, index) {
+    var body2 = (n.md || "").trim();
+    if (body2.length > 8e3) body2 = body2.slice(0, 8e3).trimEnd() + "\n\n[truncated]";
+    return "## Source " + index + ": " + (n.title || "Untitled") + "\n\nNode ID: " + n.id + "\n\n" + (body2 || "_(no markdown content)_");
+  }
+  function selectedSynthesisPosition(selected) {
+    var minY = Infinity, maxY = -Infinity, maxX = -Infinity;
+    for (var i2 = 0; i2 < selected.length; i2++) {
+      var n = selected[i2];
+      minY = Math.min(minY, n.y || 0);
+      maxY = Math.max(maxY, (n.y || 0) + (n.h || DEFAULT_CHILD.h));
+      maxX = Math.max(maxX, (n.x || 0) + (n.w || DEFAULT_CHILD.w));
+    }
+    if (!isFinite(minY) || !isFinite(maxY) || !isFinite(maxX)) return null;
+    return { x: maxX + 90, y: (minY + maxY - DEFAULT_CHILD.h) / 2 };
+  }
+  function questionMapPrompt(prompt, sourceText) {
+    return "Build a Question Map ONLY from the selected Rabbithole nodes below. Do not summarize unrelated nodes.\n\nHuman focus prompt:\n" + prompt + "\n\nOrganize the result into these sections:\n1. Answered questions\n2. Open questions\n3. Gaps or assumptions\n4. Contradictions or tensions\n5. Suggested next branches\n\nFor each suggested next branch, write the exact question to ask, say which selected source node(s) it should branch from, and explain why answering it would improve the map. Keep it actionable so the reader can open the next branches directly.\n\nSelected source nodes:\n\n" + sourceText;
+  }
+  function synthesisPrompt(prompt, sourceText) {
+    return "Synthesize ONLY the selected Rabbithole nodes below. Do not summarize unrelated nodes.\n\nHuman synthesis prompt:\n" + prompt + "\n\nSelected source nodes:\n\n" + sourceText;
+  }
+  function synthesizeSelected(source2, prompt, outputMode) {
+    if (closed) {
+      flashHint("Session ended \u2014 reopen this Rabbithole from your terminal first.");
+      return;
+    }
+    var root = nodes[rootId];
+    if (!root) return;
+    var pending = hasPendingSynthesis();
+    if (pending) {
+      flashHint("A synthesis is already being written\u2026");
+      goToNode(pending, source2);
+      return;
+    }
+    var selected = selectedCanvasNodes();
+    if (selected.length < 2) {
+      flashHint("Select at least two nodes on the canvas first.");
+      return;
+    }
+    var sourceText = selected.map(function(n, i2) {
+      return selectedNodeMarkdown(n, i2 + 1);
+    }).join("\n\n---\n\n");
+    if (sourceText.length > 3e4) sourceText = sourceText.slice(0, 3e4).trimEnd() + "\n\n[remaining selected-node content truncated]";
+    outputMode = outputMode === "question_map" ? "question_map" : "synthesis";
+    var q = outputMode === "question_map" ? questionMapPrompt(prompt, sourceText) : synthesisPrompt(prompt, sourceText);
+    var kid = sendFollowup(root, q, null, true, {
+      title: outputMode === "question_map" ? "Question map" : "Selected synthesis",
+      selectedText: (outputMode === "question_map" ? "Question map" : "Synthesis") + " requested from " + selected.length + " selected nodes.",
+      synthesisMode: outputMode,
+      synthesisSources: selected.map(function(n) {
+        return n.id;
+      }),
+      position: selectedSynthesisPosition(selected)
+    });
+    clearCanvasSelection();
+    if (mode === "canvas") revealNode(kid, source2);
+    flashHint(outputMode === "question_map" ? "\u2726 Mapping questions from " + selected.length + " selected nodes." : "\u2726 Synthesizing " + selected.length + " selected nodes.");
+  }
+  var confirmFor = null;
+  function confirmDelete(node, anchor) {
+    if (closed) {
+      flashHint(frozen ? "This is a read-only snapshot." : "Session ended \u2014 changes can't be saved anymore.");
+      return;
+    }
+    confirmFor = node.id;
+    var subCount = countSubtree(node.id) - 1;
+    document.getElementById("cf-msg").textContent = subCount > 0 ? "Remove this branch and " + subCount + " inside it?" : "Remove this branch?";
+    var r2 = anchor.getBoundingClientRect();
+    confirmEl.style.left = Math.min(window.innerWidth - confirmEl.offsetWidth - 10, Math.max(10, r2.right - confirmEl.offsetWidth)) + "px";
+    confirmEl.style.top = r2.bottom + 8 + "px";
+    confirmEl.classList.add("visible");
+    setSurfaceOrigin(confirmEl, r2);
+  }
+  function hideConfirm() {
+    confirmFor = null;
+    confirmEl.classList.remove("visible");
+  }
+  function countSubtree(id) {
+    var c2 = 1;
+    childrenOf(id).forEach(function(k) {
+      c2 += countSubtree(k.id);
+    });
+    return c2;
+  }
+  function collectSubtree(id, out) {
+    out.push(id);
+    childrenOf(id).forEach(function(k) {
+      collectSubtree(k.id, out);
+    });
+    return out;
+  }
+  function deleteBranch(node) {
+    var title = node.title || "Untitled";
+    var ids = collectSubtree(node.id, []);
+    branchHooks.post({ type: "delete_node", node_id: node.id });
+    removeNodesLocal(ids, node.parent_id);
+    flashHint(ids.length > 1 ? "Removed \u201C" + truncate2(title, 40) + "\u201D and " + (ids.length - 1) + " inside it" : "Removed \u201C" + truncate2(title, 40) + "\u201D");
+  }
+  function removeNodesLocal(ids, parentId) {
+    var currentGone = false;
+    for (var i2 = 0; i2 < ids.length; i2++) {
+      var id = ids[i2], n = nodes[id];
+      if (!n) continue;
+      if (currentNodeId === id) currentGone = true;
+      if (n.el && n.el.parentNode) n.el.parentNode.removeChild(n.el);
+      removeMarks(readerMain, id);
+      removeThreadItem(id);
+      var p = nodes[n.parent_id];
+      if (p && p.bodyEl) removeMarks(p.bodyEl, id);
+      clearEdgeHighlight(id);
+      delete nodes[id];
+    }
+    if (currentGone) {
+      setCurrentNodeId(parentId && nodes[parentId] ? parentId : rootId);
+      if (mode === "reader") openNode(currentNodeId);
+    }
+    if (canvasBuilt) {
+      renderVisibility();
+      drawEdges();
+    }
+    if (mode === "reader") {
+      renderBreadcrumb();
+      renderSidebar();
+    }
+    refreshAmbient();
+    updateSince();
   }
 
   // src/ui/hydrate.js

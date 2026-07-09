@@ -2,6 +2,7 @@ import { inheritedNodeBaseUrl } from "./base-url.js";
 
 export const BRANCH_SELECTION = "selection";
 export const BRANCH_FOLLOWUP = "followup";
+export const BRANCH_NOTES = "notes";
 
 export const LENSES = Object.freeze({
   explain: Object.freeze({
@@ -42,14 +43,14 @@ export function normalizeLens(lens) {
 
 export function normalizeBranchType(type, selectedText = "") {
   const key = String(type ?? "").trim();
-  if (key === BRANCH_SELECTION || key === BRANCH_FOLLOWUP) return key;
+  if (key === BRANCH_SELECTION || key === BRANCH_FOLLOWUP || key === BRANCH_NOTES) return key;
   return selectedText ? BRANCH_SELECTION : BRANCH_FOLLOWUP;
 }
 
 export function branchTypeOfNode(node) {
   if (!node || (!node.origin && !node.parent_id)) return null;
   const type = node.origin?.branch_type;
-  if (type === BRANCH_SELECTION || type === BRANCH_FOLLOWUP) return type;
+  if (type === BRANCH_SELECTION || type === BRANCH_FOLLOWUP || type === BRANCH_NOTES) return type;
   return node.origin?.selected_text ? BRANCH_SELECTION : BRANCH_FOLLOWUP;
 }
 
@@ -109,8 +110,8 @@ export function createPendingBranchNode(payload, parent, { now = new Date().toIS
   return {
     id: nodeId,
     parent_id: String(payload.parent_id || ""),
-    title: synthesisMode === "question_map" ? "Question map" : synthesis ? "Synthesis" : lens ? lensLabel(lens) : question ? truncate(question, 48) : "…",
-    markdown: "",
+    title: branchType === BRANCH_NOTES ? "Notes" : synthesisMode === "question_map" ? "Question map" : synthesis ? "Synthesis" : lens ? lensLabel(lens) : question ? truncate(question, 48) : "…",
+    markdown: String(payload.markdown ?? ""),
     base_url: inheritedBase.base_url,
     base_url_source: inheritedBase.base_url_source,
     origin: { selected_text: selectedText, question, lens, synthesis, synthesis_mode: synthesisMode, synthesis_sources: synthesisSources, anchor, branch_type: branchType },
@@ -118,7 +119,7 @@ export function createPendingBranchNode(payload, parent, { now = new Date().toIS
     size: normalizeSize(payload.size),
     font_scale: 1,
     collapsed: false,
-    status: "pending",
+    status: branchType === BRANCH_NOTES ? "answered" : "pending",
     read: false,
     created_at: now,
   };
@@ -131,6 +132,9 @@ export function applyNodeUpdateFields(node, payload) {
   if (typeof payload.collapsed === "boolean") next.collapsed = payload.collapsed;
   if (Number.isFinite(payload.font_scale)) next.font_scale = payload.font_scale;
   if (typeof payload.read === "boolean") next.read = payload.read;
+  if (typeof payload.markdown === "string") next.markdown = payload.markdown;
+  if (typeof payload.html === "string") next.html = payload.html;
+  if (typeof payload.title === "string") next.title = payload.title;
   return next;
 }
 
