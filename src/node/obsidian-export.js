@@ -200,13 +200,14 @@ async function collectMarkdownFiles(dir, out = []) {
   return out;
 }
 
-async function removeStaleNodeNotes(holeFolder, nodeIds) {
+async function removeStaleNodeNotes(holeFolder, nodeIds, onWrite) {
   let removed = 0;
   for (const file of await collectMarkdownFiles(holeFolder)) {
     const text = await fs.readFile(file, "utf8");
     const match = /^rabbithole_id:\s*"([^"]+)"/m.exec(text);
     if (!match || nodeIds.has(match[1])) continue;
     await fs.rm(file);
+    onWrite?.(file, "delete");
     removed += 1;
   }
   await removeEmptyDirectories(holeFolder, true);
@@ -280,7 +281,7 @@ export async function exportHoleToVault(store, holeId, { vaultPath, folder = "Ra
     onWrite?.(file);
     written.push(path.relative(vaultRoot, file));
   }
-  const removed = await removeStaleNodeNotes(holeFolder, new Set(nodes.map((node) => String(node.id))));
+  const removed = await removeStaleNodeNotes(holeFolder, new Set(nodes.map((node) => String(node.id))), onWrite);
 
   return {
     hole_id: hole.hole_id || hole.id,

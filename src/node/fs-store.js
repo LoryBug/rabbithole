@@ -13,6 +13,13 @@ import {
   validateAssetName,
 } from "../core/assets.js";
 
+const holeSaveListeners = new Set();
+
+export function onHoleSaved(listener) {
+  holeSaveListeners.add(listener);
+  return () => holeSaveListeners.delete(listener);
+}
+
 /**
  * Holes are persisted one JSON file per hole under ~/.rabbithole/.
  * Answered nodes are stored in full; pending nodes are stored as durable asks
@@ -45,6 +52,18 @@ function assertSafeHoleId(holeId) {
 
 function holePath(holeId) {
   return path.join(holesDir(), `${assertSafeHoleId(holeId)}.json`);
+}
+
+async function renameWithRetry(tmp, finalPath) {
+  for (let attempt = 0; attempt < 6; attempt += 1) {
+    try {
+      await fs.rename(tmp, finalPath);
+      return;
+    } catch (err) {
+      if (err?.code !== "EPERM" || attempt === 5) throw err;
+      await new Promise((resolve) => setTimeout(resolve, 20 * (attempt + 1)));
+    }
+  }
 }
 
 function assetsDir() {
@@ -389,10 +408,13 @@ export async function saveHole(hole) {
   const tmp = `${finalPath}.${randomUUID()}.tmp`;
   try {
     await fs.writeFile(tmp, JSON.stringify(persisted, null, 2), "utf-8");
-    await fs.rename(tmp, finalPath);
+    await renameWithRetry(tmp, finalPath);
   } catch (err) {
     await fs.rm(tmp, { force: true }).catch(() => {});
     throw err;
+  }
+  for (const listener of holeSaveListeners) {
+    try { listener(persisted); } catch (err) { warn(`Hole save listener failed: ${err.message}`); }
   }
   return persisted;
 }

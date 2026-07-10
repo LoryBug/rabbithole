@@ -102,6 +102,7 @@ try {
   assert.ok(reloadedRoot.markdown.includes("EDITED intro with"), "edit should flow back into the node");
   assert.ok(!reloadedRoot.markdown.includes("Parent:"), "generated navigation must not re-import into node markdown");
   assert.ok(!reloadedRoot.markdown.includes("rabbithole:content"), "sync markers must not re-import into node markdown");
+  await new Promise((r) => setTimeout(r, 700)); // allow the reverse mirror of this save to settle
 
   // ---- reverse direction: a newly saved Rabbithole node appears in Obsidian ----
   const grandchild = {
@@ -118,13 +119,40 @@ try {
   const grandchildText = await fs.readFile(grandchildFile, "utf8");
   assert.ok(grandchildText.includes("Created in Rabbithole after the initial sync."), "new Rabbithole node should export automatically");
   assert.ok(grandchildText.includes(`Parent: [[Rabbithole/obsidian-sync-test/${nodeFolderName(hole.nodes[1])}/index|Child node]]`));
+  await new Promise((r) => setTimeout(r, 300));
 
   // ---- deletion: removing a Rabbithole node removes its managed Obsidian note ----
   reloaded.nodes = reloaded.nodes.filter((node) => node.id !== grandchild.id);
   await defaultFsStore.saveHole(reloaded);
-  await new Promise((r) => setTimeout(r, 1000));
+  await waitFor(async () => {
+    try {
+      await fs.access(grandchildFile);
+      return null;
+    } catch {
+      return true;
+    }
+  });
   await assert.rejects(fs.access(grandchildFile), "deleted Rabbithole node should remove its Obsidian note");
   await fs.access(litPmid); // Literature notes are not managed node files.
+  await new Promise((r) => setTimeout(r, 300));
+
+  // ---- symmetric deletion: removing a managed Obsidian note removes its node subtree ----
+  await fs.rm(childFile);
+  const afterObsidianDelete = await waitFor(async () => {
+    const current = await defaultFsStore.loadHole(holeId);
+    return current.nodes.some((node) => node.id === childId) ? null : current;
+  });
+  assert.ok(afterObsidianDelete.nodes.some((node) => node.id === rootId), "deleting a child must keep the root hole");
+  assert.ok(!afterObsidianDelete.nodes.some((node) => node.id === childId), "deleted Obsidian note should remove the matching node");
+  await waitFor(async () => {
+    try {
+      await fs.access(path.dirname(childFile));
+      return null;
+    } catch {
+      return true;
+    }
+  });
+  await assert.rejects(fs.access(path.dirname(childFile)), "empty child folder should be cleaned after Obsidian deletion");
   stopVaultWatch();
 
   console.log("stage14 obsidian integration verification passed");
@@ -132,5 +160,15 @@ try {
   if (previousStoreDir == null) delete process.env.RABBITHOLE_DIR;
   else process.env.RABBITHOLE_DIR = previousStoreDir;
   stopVaultWatch();
-  await fs.rm(tmp, { recursive: true, force: true });
+  await fs.rm(tmp, { recursive: true, force: true, maxRetries: 10, retryDelay: 100 });
+}
+
+async function waitFor(check, timeoutMs = 4000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const value = await check();
+    if (value) return value;
+    await new Promise((r) => setTimeout(r, 100));
+  }
+  throw new Error("Timed out waiting for the expected sync state");
 }

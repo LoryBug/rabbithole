@@ -1,8 +1,9 @@
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
-import os from "node:os";
 import path from "node:path";
 import { exportHoleToVault } from "./obsidian-export.js";
+import { collectSubtreeIds } from "../core/model.js";
+import { onHoleSaved } from "./fs-store.js";
 
 const CONTENT_START = "<!-- rabbithole:content:start -->";
 const CONTENT_END = "<!-- rabbithole:content:end -->";
@@ -19,8 +20,12 @@ const recentWrites = new Map();
 const debounceTimers = new Map();
 let activeWatcher = null;
 
-export function markVaultWrite(filePath) {
+export function markVaultWrite(filePath, action = "write") {
   const resolved = path.resolve(filePath);
+  if (action === "delete") {
+    recentWrites.set(resolved, null);
+    return;
+  }
   try {
     recentWrites.set(resolved, fsSync.readFileSync(resolved, "utf8"));
   } catch {
@@ -78,8 +83,20 @@ async function reimportFile(filePath, store) {
   await store.saveHole(hole);
 }
 
-function rabbitsDir() {
-  return process.env.RABBITHOLE_DIR || path.join(os.homedir(), ".rabbithole");
+function indexManagedFiles(dir, out = new Map()) {
+  for (const entry of fsSync.readdirSync(dir, { withFileTypes: true })) {
+    const file = path.join(dir, entry.name);
+    if (entry.isDirectory()) indexManagedFiles(file, out);
+    else if (entry.isFile() && entry.name.endsWith(".md")) {
+      try {
+        const { frontmatter } = parseFrontmatterAndBody(fsSync.readFileSync(file, "utf8"));
+        if (frontmatter.rabbithole_id && frontmatter.hole_id) {
+          out.set(path.resolve(file), { holeId: frontmatter.hole_id, nodeId: frontmatter.rabbithole_id });
+        }
+      } catch {}
+    }
+  }
+  return out;
 }
 
 export function startVaultWatch({ vaultPath, folder = "Rabbithole", store, holeId = "" }) {
@@ -95,12 +112,68 @@ export function startVaultWatch({ vaultPath, folder = "Rabbithole", store, holeI
   }
   const watchDir = path.join(vaultRoot, folderPath);
   if (!fsSync.existsSync(watchDir)) throw new Error(`Obsidian sync folder does not exist: ${watchDir}`);
+  let managedFiles = indexManagedFiles(watchDir);
+  let missingTimer = null;
+  let reconciling = false;
+  let stopped = false;
+
+  const removeDeletedNode = async (entry, filePath) => {
+    const hole = await store.loadHole(entry.holeId);
+    if (!hole) return;
+    if (hole.root_id === entry.nodeId) {
+      await exportHoleToVault(store, entry.holeId, { vaultPath: vaultRoot, folder: folderPath, onWrite: markVaultWrite });
+      managedFiles = indexManagedFiles(watchDir);
+      return;
+    }
+    const nodes = Array.isArray(hole.nodes) ? hole.nodes : Object.values(hole.nodes || {});
+    const doomed = new Set(collectSubtreeIds(nodes, entry.nodeId));
+    if (doomed.size === 1 && !nodes.some((node) => node.id === entry.nodeId)) return;
+    hole.nodes = nodes.filter((node) => !doomed.has(node.id));
+    await store.saveHole(hole);
+    for (const [managedFile, info] of managedFiles) {
+      if (info.holeId === entry.holeId && doomed.has(info.nodeId)) managedFiles.delete(managedFile);
+    }
+    managedFiles.delete(filePath);
+  };
+
+  const reconcileMissingFiles = async () => {
+    if (stopped || reconciling) return;
+    reconciling = true;
+    missingTimer = null;
+    try {
+      for (const [file, entry] of [...managedFiles]) {
+        if (stopped) return;
+        if (fsSync.existsSync(file)) continue;
+        if (recentWrites.has(file) && recentWrites.get(file) === null) {
+          recentWrites.delete(file);
+          managedFiles.delete(file);
+          continue;
+        }
+        await removeDeletedNode(entry, file);
+      }
+    } finally {
+      reconciling = false;
+    }
+  };
+
+  const scheduleMissingReconciliation = () => {
+    if (missingTimer) clearTimeout(missingTimer);
+    missingTimer = setTimeout(() => reconcileMissingFiles().catch(() => {}), 500);
+  };
 
   const onChange = (filePath) => {
     const full = filePath ? path.resolve(watchDir, filePath) : watchDir;
     const resolved = path.resolve(full);
     if (!resolved.startsWith(path.resolve(watchDir))) return;
-    if (!resolved.endsWith(".md")) return;
+    if (!resolved.endsWith(".md")) {
+      scheduleMissingReconciliation();
+      return;
+    }
+
+    if (!fsSync.existsSync(resolved)) {
+      scheduleMissingReconciliation();
+      return;
+    }
 
     if (recentWrites.has(resolved)) {
       const writtenContent = recentWrites.get(resolved);
@@ -114,7 +187,9 @@ export function startVaultWatch({ vaultPath, folder = "Rabbithole", store, holeI
       resolved,
       setTimeout(() => {
         debounceTimers.delete(resolved);
-        reimportFile(resolved, store).catch(() => {});
+        reimportFile(resolved, store).then(() => {
+          managedFiles = indexManagedFiles(watchDir);
+        }).catch(() => {});
       }, 400)
     );
   };
@@ -123,28 +198,34 @@ export function startVaultWatch({ vaultPath, folder = "Rabbithole", store, holeI
     if (filename) onChange(filename);
   });
 
-  const storeDir = rabbitsDir();
-  const holeFile = holeId ? `${holeId}.json` : "";
   const exportTimer = { value: null };
-  const storeWatcher = holeFile && fsSync.existsSync(storeDir)
-    ? fsSync.watch(storeDir, (_event, filename) => {
-      if (String(filename || "") !== holeFile) return;
+  let exportInFlight = Promise.resolve();
+  const stopStoreWatch = holeId
+    ? onHoleSaved((hole) => {
+      if (String(hole.hole_id) !== String(holeId)) return;
       if (exportTimer.value) clearTimeout(exportTimer.value);
       exportTimer.value = setTimeout(() => {
         exportTimer.value = null;
-        exportHoleToVault(store, holeId, { vaultPath: vaultRoot, folder: folderPath, onWrite: markVaultWrite }).catch(() => {});
+        exportInFlight = exportInFlight
+          .then(() => exportHoleToVault(store, holeId, { vaultPath: vaultRoot, folder: folderPath, onWrite: markVaultWrite }))
+          .then(() => { managedFiles = indexManagedFiles(watchDir); })
+          .catch(() => {});
       }, 400);
     })
-    : null;
+    : () => {};
+  const missingPoll = setInterval(() => reconcileMissingFiles().catch(() => {}), 500);
+  missingPoll.unref?.();
 
   activeWatcher = {
     watcher,
-    storeWatcher,
     watchDir,
     stop() {
+      stopped = true;
       watcher.close();
-      storeWatcher?.close();
+      stopStoreWatch();
       if (exportTimer.value) clearTimeout(exportTimer.value);
+      if (missingTimer) clearTimeout(missingTimer);
+      clearInterval(missingPoll);
       for (const t of debounceTimers.values()) clearTimeout(t);
       debounceTimers.clear();
     },
