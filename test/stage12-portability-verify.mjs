@@ -161,10 +161,10 @@ try {
   const jsonImportPage = await jsonFresh.newPage();
   await jsonImportPage.goto(baseUrl, { waitUntil: "networkidle" });
   await jsonImportPage.setInputFiles("#file-md", sessionJsonPath);
-  await jsonImportPage.waitForSelector(".doc-content[data-node-id] img");
-  await jsonImportPage.waitForSelector("text=Portable asset page");
+  await jsonImportPage.waitForSelector(".node .doc-content[data-node-id] img");
+  await waitForCanvasText(jsonImportPage, "Portable asset page");
   await jsonImportPage.waitForFunction(() => {
-    const img = document.querySelector(".doc-content[data-node-id] img");
+    const img = document.querySelector(".node .doc-content[data-node-id] img");
     return !!img && img.complete && img.naturalWidth > 0;
   });
 
@@ -176,7 +176,7 @@ try {
     for (const name of assets) sizes[name] = (await window.__rhWebApp.store.getAsset(holeId, name)).size;
     return { holeId, raw, assets, sizes };
   });
-  assert.deepEqual(projectHole(jsonImported.raw), projectHole(original.raw));
+  assert.deepEqual(projectHole(jsonImported.raw), projectSession(sessionJson.session));
   assert.deepEqual(jsonImported.assets, original.assets);
   assert.equal(jsonImported.sizes["page-001.png"], original.sizes["page-001.png"]);
 
@@ -242,6 +242,15 @@ function projectHole(hole) {
   };
 }
 
+function projectSession(session) {
+  return projectHole({
+    title: session.title,
+    root_id: session.root_id,
+    view_state: session.view_state || null,
+    nodes: session.nodes || [],
+  });
+}
+
 function comparableNodeSize(node, hole) {
   const size = node.size;
   if (!size) return null;
@@ -261,7 +270,14 @@ function comparableViewState(hole) {
     (Number(view.x) || 0) === 0 &&
     (Number(view.y) || 0) === 0 &&
     (Number(view.scale) || 1) === 1;
-  return isDefaultReaderLanding ? null : state;
+  const isDefaultCanvasLanding =
+    state.mode === "canvas" &&
+    state.node_id === hole.root_id &&
+    (Number(state.scroll) || 0) === 0 &&
+    (Number(view.x) || 0) === 0 &&
+    (Number(view.y) || 0) === 0 &&
+    (Number(view.scale) || 1) === 1;
+  return isDefaultReaderLanding || isDefaultCanvasLanding ? null : state;
 }
 
 function sse(chunks) {

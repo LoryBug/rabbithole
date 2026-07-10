@@ -296,6 +296,9 @@ body.mode-canvas #viewport { display: block; }
 .node.node-enter { opacity: 0; transform: translateY(8px); transition: opacity 180ms cubic-bezier(0.23, 1, 0.32, 1), transform 180ms cubic-bezier(0.23, 1, 0.32, 1); }
 .node.node-enter.entered { opacity: 1; transform: translateY(0); }
 .node.root { border-color: var(--border-focus); }
+.node.notes { --node-bg: #fff2ab; --node-head: #f2d568; --fg: #4a3b08; --fg-bold: #302500; --fg-dim: #705b10; --fg-faint: #967a22; --border: #d5b947; --border-focus: #b88b10; background: var(--node-bg); border-color: var(--border); box-shadow: 0 8px 20px -9px rgba(88, 66, 0, 0.45); }
+.node.notes .node-acts { background: linear-gradient(90deg, transparent, var(--node-head) 28%); }
+.node.notes .notes-badge { color: #876300; }
 .node.selected { border-color: var(--accent); box-shadow: var(--shadow), 0 0 0 2px color-mix(in srgb, var(--accent) 22%, transparent); }
 /* The head stays minimal — just the title — so the card reads like a document.
    Controls sit in a right-edge overlay with secondary text sizing de-emphasized. */

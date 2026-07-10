@@ -29345,7 +29345,7 @@ ${text2}</tr>
   var NODE_COPY_ICON = '<svg width="16" height="16" viewBox="0 0 16 16" stroke="currentColor" stroke-width="1.5" stroke-linejoin="round" fill="none" aria-hidden="true"><rect x="5" y="4" width="7" height="9" rx="1.2"/><path d="M4 11.5H3.7c-.7 0-1.2-.5-1.2-1.2V3.7c0-.7.5-1.2 1.2-1.2h5.6c.7 0 1.2.5 1.2 1.2V4"/></svg>';
   function createNodeEl(node, enter) {
     var el = document.createElement("div");
-    el.className = "node" + (node.id === rootId ? " root" : "");
+    el.className = "node" + (node.id === rootId ? " root" : "") + (isNotesBranch(node) ? " notes" : "");
     if (enter && !document.hidden && !shouldReduceMotion()) el.className += " node-enter";
     el.dataset.id = node.id;
     var head = document.createElement("div");

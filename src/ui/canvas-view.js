@@ -176,7 +176,7 @@ export function screenToWorld(sx, sy){ return { x: (sx - view.x) / view.scale, y
 
 export function createNodeEl(node, enter){
     var el = document.createElement("div");
-    el.className = "node" + (node.id === rootId ? " root" : "");
+    el.className = "node" + (node.id === rootId ? " root" : "") + (isNotesBranch(node) ? " notes" : "");
     if (enter && !document.hidden && !shouldReduceMotion()) el.className += " node-enter";
     el.dataset.id = node.id;
 
