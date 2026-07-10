@@ -190,6 +190,40 @@ async function removeLegacyFlatNote(holeFolder, node, noteFile) {
   } catch {}
 }
 
+async function collectMarkdownFiles(dir, out = []) {
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    const file = path.join(dir, entry.name);
+    if (entry.isDirectory()) await collectMarkdownFiles(file, out);
+    else if (entry.isFile() && entry.name.endsWith(".md")) out.push(file);
+  }
+  return out;
+}
+
+async function removeStaleNodeNotes(holeFolder, nodeIds) {
+  let removed = 0;
+  for (const file of await collectMarkdownFiles(holeFolder)) {
+    const text = await fs.readFile(file, "utf8");
+    const match = /^rabbithole_id:\s*"([^"]+)"/m.exec(text);
+    if (!match || nodeIds.has(match[1])) continue;
+    await fs.rm(file);
+    removed += 1;
+  }
+  await removeEmptyDirectories(holeFolder, true);
+  return removed;
+}
+
+async function removeEmptyDirectories(dir, keep = false) {
+  const entries = await fs.readdir(dir, { withFileTypes: true });
+  for (const entry of entries) {
+    if (!entry.isDirectory()) continue;
+    await removeEmptyDirectories(path.join(dir, entry.name));
+  }
+  if (!keep) {
+    try { await fs.rmdir(dir); } catch {}
+  }
+}
+
 export async function exportHoleToVault(store, holeId, { vaultPath, folder = "Rabbithole", onWrite = null } = {}) {
   if (!vaultPath) throw new Error("vaultPath is required (path to an existing Obsidian vault)");
   const vaultRoot = path.resolve(vaultPath);
@@ -246,6 +280,7 @@ export async function exportHoleToVault(store, holeId, { vaultPath, folder = "Ra
     onWrite?.(file);
     written.push(path.relative(vaultRoot, file));
   }
+  const removed = await removeStaleNodeNotes(holeFolder, new Set(nodes.map((node) => String(node.id))));
 
   return {
     hole_id: hole.hole_id || hole.id,
@@ -253,6 +288,7 @@ export async function exportHoleToVault(store, holeId, { vaultPath, folder = "Ra
     vault_path: vaultRoot,
     folder: folderPath,
     notes: written.length,
+    removed,
     files: written,
   };
 }

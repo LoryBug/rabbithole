@@ -118,6 +118,13 @@ try {
   const grandchildText = await fs.readFile(grandchildFile, "utf8");
   assert.ok(grandchildText.includes("Created in Rabbithole after the initial sync."), "new Rabbithole node should export automatically");
   assert.ok(grandchildText.includes(`Parent: [[Rabbithole/obsidian-sync-test/${nodeFolderName(hole.nodes[1])}/index|Child node]]`));
+
+  // ---- deletion: removing a Rabbithole node removes its managed Obsidian note ----
+  reloaded.nodes = reloaded.nodes.filter((node) => node.id !== grandchild.id);
+  await defaultFsStore.saveHole(reloaded);
+  await new Promise((r) => setTimeout(r, 1000));
+  await assert.rejects(fs.access(grandchildFile), "deleted Rabbithole node should remove its Obsidian note");
+  await fs.access(litPmid); // Literature notes are not managed node files.
   stopVaultWatch();
 
   console.log("stage14 obsidian integration verification passed");
