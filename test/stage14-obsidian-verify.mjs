@@ -3,8 +3,9 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { defaultFsStore } from "../src/node/fs-store.js";
-import { exportHoleToVault, extractCitations, linkCitationsInMarkdown, literatureNoteName, nodeNoteName, slugify } from "../src/node/obsidian-export.js";
-import { startVaultWatch, stopVaultWatch } from "../src/node/obsidian-sync.js";
+import { extractCitations, linkCitationsInMarkdown, literatureNoteName, nodeNoteName, slugify } from "../src/node/obsidian-export.js";
+import { stopVaultWatch } from "../src/node/obsidian-sync.js";
+import { toolDefinitions } from "../src/node/tools/manifest.js";
 import { toPersistedHole } from "../src/core/schema.js";
 
 const tmp = await fs.mkdtemp(path.join(os.tmpdir(), "rabbithole-obsidian-"));
@@ -55,7 +56,10 @@ try {
   await fs.mkdir(vaultPath, { recursive: true });
   await fs.mkdir(path.join(vaultPath, ".obsidian"), { recursive: true }); // make it look like a vault
 
-  const result = await exportHoleToVault(defaultFsStore, holeId, { vaultPath, folder: "Rabbithole" });
+  const syncTool = toolDefinitions.find((tool) => tool.name === "sync_hole_to_obsidian");
+  assert.ok(syncTool, "Obsidian sync MCP tool should be registered");
+  const result = await syncTool.run({ hole_id: holeId, vault_path: vaultPath, folder: "Rabbithole", two_way: true });
+  assert.equal(result.two_way, true);
   // 2 nodes + 2 literature notes = 4 files
   assert.equal(result.notes, 4);
   assert.equal(result.files.length, 4);
@@ -87,7 +91,6 @@ try {
   assert.ok(litText.includes("https://pubmed.ncbi.nlm.nih.gov/38104516/"));
 
   // ---- two-way: editing a note re-imports into the node ----
-  startVaultWatch({ vaultPath, folder: "Rabbithole", store: defaultFsStore });
   await fs.writeFile(rootFile, rootText.replace("Intro with", "EDITED intro with"), "utf8");
 
   // wait for debounced reimport

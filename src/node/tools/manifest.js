@@ -194,7 +194,7 @@ export const toolDefinitions = [
     }),
     resultKind: "json",
     run: async ({ hole_id, vault_path, folder, two_way = true }) => {
-      const result = await exportHoleToVault(defaultFsStore, hole_id, { vaultPath: vaultPath, folder });
+      const result = await exportHoleToVault(defaultFsStore, hole_id, { vaultPath: vault_path, folder });
       const watcher = two_way ? startVaultWatch({ vaultPath: vault_path, folder, store: defaultFsStore }) : null;
       return { ...result, two_way: !!watcher, watching: watcher?.watching || null };
     },
@@ -210,7 +210,7 @@ export const toolDefinitions = [
       folder: str("Subfolder inside the vault for Rabbithole notes (default 'Rabbithole')", { optional: true }),
     }),
     resultKind: "json",
-    run: ({ vault_path, folder }) => startVaultWatch({ vaultPath: vaultPath, folder, store: defaultFsStore }),
+    run: ({ vault_path, folder }) => startVaultWatch({ vaultPath: vault_path, folder, store: defaultFsStore }),
   },
   {
     name: "stop_obsidian_watch",
