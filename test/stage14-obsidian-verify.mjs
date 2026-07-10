@@ -3,7 +3,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { defaultFsStore } from "../src/node/fs-store.js";
-import { extractCitations, linkCitationsInMarkdown, literatureNoteName, nodeNoteName, slugify } from "../src/node/obsidian-export.js";
+import { extractCitations, linkCitationsInMarkdown, literatureNoteName, nodeFolderName, slugify } from "../src/node/obsidian-export.js";
 import { stopVaultWatch } from "../src/node/obsidian-sync.js";
 import { toolDefinitions } from "../src/node/tools/manifest.js";
 import { toPersistedHole } from "../src/core/schema.js";
@@ -64,8 +64,9 @@ try {
   assert.equal(result.notes, 4);
   assert.equal(result.files.length, 4);
 
-  const rootFile = path.join(vaultPath, "Rabbithole", "obsidian-sync-test", `${nodeNoteName(hole.nodes[0])}.md`);
-  const childFile = path.join(vaultPath, "Rabbithole", "obsidian-sync-test", `${nodeNoteName(hole.nodes[1])}.md`);
+  const holeFolder = path.join(vaultPath, "Rabbithole", "obsidian-sync-test");
+  const rootFile = path.join(holeFolder, "index.md");
+  const childFile = path.join(holeFolder, nodeFolderName(hole.nodes[1]), "index.md");
   const litPmid = path.join(vaultPath, "Rabbithole", "obsidian-sync-test", "Literature", "PMID 38104516.md");
   const litDoi = path.join(vaultPath, "Rabbithole", "obsidian-sync-test", "Literature", "DOI 10.1016-j.compbiomed.2023.107777.md");
   for (const f of [rootFile, childFile, litPmid, litDoi]) {
@@ -78,19 +79,20 @@ try {
   assert.match(rootText, /tags: \[rabbithole\]/);
   assert.ok(rootText.includes("<!-- rabbithole:content:start -->"));
   assert.ok(rootText.includes("<!-- rabbithole:content:end -->"));
-  assert.ok(rootText.includes(`[[${nodeNoteName(hole.nodes[1])}|Child node]]`));
-  assert.ok(rootText.includes(`[[${literatureNoteName("pmid", "38104516")}]]`));
+  assert.ok(rootText.includes(`[[Rabbithole/obsidian-sync-test/${nodeFolderName(hole.nodes[1])}/index|Child node]]`));
+  assert.ok(rootText.includes(`[[Rabbithole/obsidian-sync-test/${literatureNoteName("pmid", "38104516")}|PMID 38104516]]`));
 
   const childText = await fs.readFile(childFile, "utf8");
   assert.match(childText, /parent_id: "node-root"/);
-  assert.ok(childText.includes(`Parent: [[${nodeNoteName(hole.nodes[0])}|Root node]]`));
-  assert.ok(childText.includes(`[[${literatureNoteName("doi", "10.1016/j.compbiomed.2023.107777")}]]`));
+  assert.ok(childText.includes("Parent: [[Rabbithole/obsidian-sync-test/index|Root node]]"));
+  assert.ok(childText.includes(`[[Rabbithole/obsidian-sync-test/${literatureNoteName("doi", "10.1016/j.compbiomed.2023.107777")}|DOI 10.1016-j.compbiomed.2023.107777]]`));
 
   const litText = await fs.readFile(litPmid, "utf8");
   assert.match(litText, /type: literature/);
   assert.ok(litText.includes("https://pubmed.ncbi.nlm.nih.gov/38104516/"));
 
   // ---- two-way: editing a note re-imports into the node ----
+  await new Promise((r) => setTimeout(r, 100)); // let fs.watch attach before the first external edit
   await fs.writeFile(rootFile, rootText.replace("Intro with", "EDITED intro with"), "utf8");
 
   // wait for debounced reimport
@@ -100,6 +102,22 @@ try {
   assert.ok(reloadedRoot.markdown.includes("EDITED intro with"), "edit should flow back into the node");
   assert.ok(!reloadedRoot.markdown.includes("Parent:"), "generated navigation must not re-import into node markdown");
   assert.ok(!reloadedRoot.markdown.includes("rabbithole:content"), "sync markers must not re-import into node markdown");
+
+  // ---- reverse direction: a newly saved Rabbithole node appears in Obsidian ----
+  const grandchild = {
+    id: "node-grandchild",
+    parent_id: childId,
+    title: "New branch",
+    markdown: "# New branch\n\nCreated in Rabbithole after the initial sync.",
+    origin: { branch_type: "followup", question: "What changed?" },
+  };
+  reloaded.nodes.push(grandchild);
+  await defaultFsStore.saveHole(reloaded);
+  await new Promise((r) => setTimeout(r, 1000));
+  const grandchildFile = path.join(holeFolder, nodeFolderName(hole.nodes[1]), nodeFolderName(grandchild), "index.md");
+  const grandchildText = await fs.readFile(grandchildFile, "utf8");
+  assert.ok(grandchildText.includes("Created in Rabbithole after the initial sync."), "new Rabbithole node should export automatically");
+  assert.ok(grandchildText.includes(`Parent: [[Rabbithole/obsidian-sync-test/${nodeFolderName(hole.nodes[1])}/index|Child node]]`));
   stopVaultWatch();
 
   console.log("stage14 obsidian integration verification passed");

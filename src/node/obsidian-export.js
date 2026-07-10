@@ -1,6 +1,5 @@
 import fs from "node:fs/promises";
 import path from "node:path";
-import { markVaultWrite } from "./obsidian-sync.js";
 
 /**
  * Export a Rabbithole hole into an existing Obsidian vault as a folder of
@@ -72,8 +71,34 @@ export function nodeNoteName(node) {
   return `${slugify(node.title || node.id)}--${slugify(node.id, 12)}`;
 }
 
-function nodeWikilink(node) {
-  return `[[${nodeNoteName(node)}|${node.title || "Untitled"}]]`;
+export function nodeFolderName(node) {
+  return `${slugify(node.title || node.id, 24)}--${slugify(node.id, 8)}`;
+}
+
+function buildNodeNotePaths(nodes, rootId) {
+  const byId = new Map(nodes.map((node) => [node.id, node]));
+  const paths = new Map();
+
+  function resolve(node) {
+    if (paths.has(node.id)) return paths.get(node.id);
+    if (!node.parent_id || node.id === rootId || !byId.has(node.parent_id)) {
+      paths.set(node.id, "index");
+      return "index";
+    }
+    const parent = byId.get(node.parent_id);
+    const parentPath = resolve(parent);
+    const parentDir = parentPath === "index" ? "" : path.posix.dirname(parentPath);
+    const notePath = path.posix.join(parentDir, nodeFolderName(node), "index");
+    paths.set(node.id, notePath);
+    return notePath;
+  }
+
+  for (const node of nodes) resolve(node);
+  return paths;
+}
+
+function nodeWikilink(node, notePaths, linkPrefix) {
+  return `[[${path.posix.join(linkPrefix, notePaths.get(node.id))}|${node.title || "Untitled"}]]`;
 }
 
 // Replace bare citation tokens with Obsidian wikilinks to Literature notes.
@@ -117,11 +142,11 @@ function nodeType(node) {
   return "document";
 }
 
-function noteBody(node, nodesById, citations) {
+function noteBody(node, nodesById, notePaths, citations, linkPrefix) {
   const parent = node.parent_id ? nodesById.get(node.parent_id) : null;
   const children = [...nodesById.values()].filter((n) => n.parent_id === node.id);
   const out = [];
-  if (parent) out.push(`Parent: ${nodeWikilink(parent)}`);
+  if (parent) out.push(`Parent: ${nodeWikilink(parent, notePaths, linkPrefix)}`);
   out.push("");
   out.push(CONTENT_START);
   out.push(String(node.markdown || "").trim());
@@ -129,12 +154,12 @@ function noteBody(node, nodesById, citations) {
   if (children.length) {
     out.push("");
     out.push("Children:");
-    for (const child of children) out.push(`- ${nodeWikilink(child)}`);
+    for (const child of children) out.push(`- ${nodeWikilink(child, notePaths, linkPrefix)}`);
   }
   if (citations.length) {
     out.push("");
     out.push("Sources:");
-    for (const c of citations) out.push(`- [[${literatureNoteName(c.kind, c.id)}]] — ${c.url}`);
+    for (const c of citations) out.push(`- [[${path.posix.join(linkPrefix, literatureNoteName(c.kind, c.id))}|${c.label}]] — ${c.url}`);
   }
   return out.join("\n").replace(/\n{3,}/g, "\n\n").trim() + "\n";
 }
@@ -156,7 +181,16 @@ function literatureNoteContent(citation) {
   return lines.join("\n").trim() + "\n";
 }
 
-export async function exportHoleToVault(store, holeId, { vaultPath, folder = "Rabbithole" } = {}) {
+async function removeLegacyFlatNote(holeFolder, node, noteFile) {
+  const legacyFile = path.join(holeFolder, `${nodeNoteName(node)}.md`);
+  if (path.resolve(legacyFile) === path.resolve(noteFile)) return;
+  try {
+    const text = await fs.readFile(legacyFile, "utf8");
+    if (text.includes(`rabbithole_id: "${node.id}"`)) await fs.rm(legacyFile);
+  } catch {}
+}
+
+export async function exportHoleToVault(store, holeId, { vaultPath, folder = "Rabbithole", onWrite = null } = {}) {
   if (!vaultPath) throw new Error("vaultPath is required (path to an existing Obsidian vault)");
   const vaultRoot = path.resolve(vaultPath);
   const folderPath = String(folder || "Rabbithole");
@@ -180,8 +214,11 @@ export async function exportHoleToVault(store, holeId, { vaultPath, folder = "Ra
   if (!hole) throw new Error(`Hole not found: ${holeId}`);
   const nodes = Array.isArray(hole.nodes) ? hole.nodes : Object.values(hole.nodes || {});
   const nodesById = new Map(nodes.map((n) => [n.id, n]));
+  const notePaths = buildNodeNotePaths(nodes, hole.root_id);
 
-  const holeFolder = path.join(vaultRoot, folderPath, slugify(hole.title || "rabbithole"));
+  const holeSlug = slugify(hole.title || "rabbithole");
+  const holeFolder = path.join(vaultRoot, folderPath, holeSlug);
+  const linkPrefix = path.posix.join(folderPath.replace(/\\/g, "/"), holeSlug);
   const litFolder = path.join(holeFolder, LIT_FOLDER);
   await fs.mkdir(holeFolder, { recursive: true });
   await fs.mkdir(litFolder, { recursive: true });
@@ -194,17 +231,19 @@ export async function exportHoleToVault(store, holeId, { vaultPath, folder = "Ra
     for (const c of citations) literature.set(`${c.kind}:${c.id}`, c);
     const parent = node.parent_id ? nodesById.get(node.parent_id) : null;
     const front = buildFrontmatter(node, hole, { type: nodeType(node), parentTitle: parent?.title });
-    const body = noteBody(node, nodesById, citations);
-    const file = path.join(holeFolder, `${nodeNoteName(node)}.md`);
+    const body = noteBody(node, nodesById, notePaths, citations, linkPrefix);
+    const file = path.join(holeFolder, `${notePaths.get(node.id)}.md`);
+    await fs.mkdir(path.dirname(file), { recursive: true });
+    await removeLegacyFlatNote(holeFolder, node, file);
     await fs.writeFile(file, `${front}\n\n${body}`, "utf8");
-    markVaultWrite(file);
+    onWrite?.(file);
     written.push(path.relative(vaultRoot, file));
   }
 
   for (const c of literature.values()) {
     const file = path.join(litFolder, `${literatureLabel(c.kind, c.id)}.md`);
     await fs.writeFile(file, literatureNoteContent(c), "utf8");
-    markVaultWrite(file);
+    onWrite?.(file);
     written.push(path.relative(vaultRoot, file));
   }
 

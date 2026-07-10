@@ -1,4 +1,4 @@
-import { openRabbithole, answerBranch, ingestPdf, listRabbitholes, exportHoleToVault, startVaultWatch, stopVaultWatch } from "../index.js";
+import { openRabbithole, answerBranch, ingestPdf, listRabbitholes, exportHoleToVault, markVaultWrite, startVaultWatch, stopVaultWatch } from "../index.js";
 import { defaultFsStore } from "../fs-store.js";
 import { normalizeBaseUrl } from "../../core/base-url.js";
 import { AUTHORING_VOCABULARY } from "../../core/prompts/index.js";
@@ -180,12 +180,14 @@ export const toolDefinitions = [
     name: "sync_hole_to_obsidian",
     description:
       "Export a Rabbithole hole into an EXISTING Obsidian vault as live markdown notes. Each node becomes " +
-      "one note under <vault_path>/<folder>/<hole slug>/ with YAML frontmatter (rabbithole_id, hole_id, " +
-      "parent_id) so the Obsidian graph mirrors the canvas tree. Citations (PMID / DOI / arXiv) become " +
+      "an index.md inside a parent-derived folder under <vault_path>/<folder>/<hole slug>/, with YAML " +
+      "frontmatter (rabbithole_id, hole_id, parent_id) so the Obsidian graph mirrors the canvas tree. " +
+      "Citations (PMID / DOI / arXiv) become " +
       "Literature/ notes linked with wikilinks. Point vault_path at your vault's root folder. " +
-      "Notes are written directly to disk; Obsidian picks them up automatically. By default it also starts " +
-      "the two-way watcher: later edits to the managed content block in Obsidian update the matching node. " +
-      "Returns the list of written files and watcher status.",
+       "Notes are written directly to disk; Obsidian picks them up automatically. By default it also starts " +
+       "the two-way watcher: later edits to the managed content block in Obsidian update the matching node, " +
+       "and later Rabbithole saves export new or changed nodes back into the vault. Returns the list of written " +
+       "files and watcher status.",
     input: obj({
       hole_id: str("Resume a saved hole by id (use list_rabbitholes to find it)"),
       vault_path: str("Absolute path to an existing Obsidian vault folder"),
@@ -194,8 +196,8 @@ export const toolDefinitions = [
     }),
     resultKind: "json",
     run: async ({ hole_id, vault_path, folder, two_way = true }) => {
-      const result = await exportHoleToVault(defaultFsStore, hole_id, { vaultPath: vault_path, folder });
-      const watcher = two_way ? startVaultWatch({ vaultPath: vault_path, folder, store: defaultFsStore }) : null;
+      const result = await exportHoleToVault(defaultFsStore, hole_id, { vaultPath: vault_path, folder, onWrite: markVaultWrite });
+      const watcher = two_way ? startVaultWatch({ vaultPath: vault_path, folder, store: defaultFsStore, holeId: hole_id }) : null;
       return { ...result, two_way: !!watcher, watching: watcher?.watching || null };
     },
   },
@@ -203,14 +205,15 @@ export const toolDefinitions = [
     name: "watch_obsidian_vault",
     description:
       "Start TWO-WAY sync: watch the Obsidian vault subfolder and re-import edited notes back into their " +
-      "Rabbithole nodes (only the note body; the canvas tree stays authoritative). Rabbithole remains the " +
-      "source of structure. Call once after sync_hole_to_obsidian. Returns the watched folder.",
+      "Rabbithole nodes (only the note body; the canvas tree stays authoritative). Passing hole_id also watches " +
+      "that hole's persisted saves and exports new or changed nodes back to the vault. Returns the watched folder.",
     input: obj({
       vault_path: str("Absolute path to an existing Obsidian vault folder"),
       folder: str("Subfolder inside the vault for Rabbithole notes (default 'Rabbithole')", { optional: true }),
+      hole_id: str("Optional hole id to also watch for Rabbithole-to-Obsidian exports", { optional: true }),
     }),
     resultKind: "json",
-    run: ({ vault_path, folder }) => startVaultWatch({ vaultPath: vault_path, folder, store: defaultFsStore }),
+    run: ({ vault_path, folder, hole_id }) => startVaultWatch({ vaultPath: vault_path, folder, store: defaultFsStore, holeId: hole_id }),
   },
   {
     name: "stop_obsidian_watch",

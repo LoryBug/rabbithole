@@ -1,6 +1,8 @@
 import fs from "node:fs/promises";
 import fsSync from "node:fs";
+import os from "node:os";
 import path from "node:path";
+import { exportHoleToVault } from "./obsidian-export.js";
 
 const CONTENT_START = "<!-- rabbithole:content:start -->";
 const CONTENT_END = "<!-- rabbithole:content:end -->";
@@ -76,7 +78,11 @@ async function reimportFile(filePath, store) {
   await store.saveHole(hole);
 }
 
-export function startVaultWatch({ vaultPath, folder = "Rabbithole", store }) {
+function rabbitsDir() {
+  return process.env.RABBITHOLE_DIR || path.join(os.homedir(), ".rabbithole");
+}
+
+export function startVaultWatch({ vaultPath, folder = "Rabbithole", store, holeId = "" }) {
   if (activeWatcher) stopVaultWatch();
   const vaultRoot = path.resolve(vaultPath);
   const folderPath = String(folder || "Rabbithole");
@@ -117,11 +123,28 @@ export function startVaultWatch({ vaultPath, folder = "Rabbithole", store }) {
     if (filename) onChange(filename);
   });
 
+  const storeDir = rabbitsDir();
+  const holeFile = holeId ? `${holeId}.json` : "";
+  const exportTimer = { value: null };
+  const storeWatcher = holeFile && fsSync.existsSync(storeDir)
+    ? fsSync.watch(storeDir, (_event, filename) => {
+      if (String(filename || "") !== holeFile) return;
+      if (exportTimer.value) clearTimeout(exportTimer.value);
+      exportTimer.value = setTimeout(() => {
+        exportTimer.value = null;
+        exportHoleToVault(store, holeId, { vaultPath: vaultRoot, folder: folderPath, onWrite: markVaultWrite }).catch(() => {});
+      }, 400);
+    })
+    : null;
+
   activeWatcher = {
     watcher,
+    storeWatcher,
     watchDir,
     stop() {
       watcher.close();
+      storeWatcher?.close();
+      if (exportTimer.value) clearTimeout(exportTimer.value);
       for (const t of debounceTimers.values()) clearTimeout(t);
       debounceTimers.clear();
     },
