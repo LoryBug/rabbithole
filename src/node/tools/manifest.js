@@ -1,4 +1,5 @@
-import { openRabbithole, answerBranch, ingestPdf, listRabbitholes } from "../index.js";
+import { openRabbithole, answerBranch, ingestPdf, listRabbitholes, exportHoleToVault, startVaultWatch, stopVaultWatch } from "../index.js";
+import { defaultFsStore } from "../fs-store.js";
 import { normalizeBaseUrl } from "../../core/base-url.js";
 import { AUTHORING_VOCABULARY } from "../../core/prompts/index.js";
 import { MAX_ASSETS_PER_CALL, validateAssetEntriesSync } from "../fs-store.js";
@@ -174,5 +175,51 @@ export const toolDefinitions = [
     input: obj({}),
     resultKind: "json",
     run: () => listRabbitholes(),
+  },
+  {
+    name: "sync_hole_to_obsidian",
+    description:
+      "Export a Rabbithole hole into an EXISTING Obsidian vault as live markdown notes. Each node becomes " +
+      "one note under <vault_path>/<folder>/<hole slug>/ with YAML frontmatter (rabbithole_id, hole_id, " +
+      "parent_id) so the Obsidian graph mirrors the canvas tree. Citations (PMID / DOI / arXiv) become " +
+      "Literature/ notes linked with wikilinks. Point vault_path at your vault's root folder. " +
+      "Notes are written directly to disk; Obsidian picks them up automatically. By default it also starts " +
+      "the two-way watcher: later edits to the managed content block in Obsidian update the matching node. " +
+      "Returns the list of written files and watcher status.",
+    input: obj({
+      hole_id: str("Resume a saved hole by id (use list_rabbitholes to find it)"),
+      vault_path: str("Absolute path to an existing Obsidian vault folder"),
+      folder: str("Subfolder inside the vault for Rabbithole notes (default 'Rabbithole')", { optional: true }),
+      two_way: bool("Start the two-way watcher after export (default true)", { optional: true, default: true }),
+    }),
+    resultKind: "json",
+    run: async ({ hole_id, vault_path, folder, two_way = true }) => {
+      const result = await exportHoleToVault(defaultFsStore, hole_id, { vaultPath: vaultPath, folder });
+      const watcher = two_way ? startVaultWatch({ vaultPath: vault_path, folder, store: defaultFsStore }) : null;
+      return { ...result, two_way: !!watcher, watching: watcher?.watching || null };
+    },
+  },
+  {
+    name: "watch_obsidian_vault",
+    description:
+      "Start TWO-WAY sync: watch the Obsidian vault subfolder and re-import edited notes back into their " +
+      "Rabbithole nodes (only the note body; the canvas tree stays authoritative). Rabbithole remains the " +
+      "source of structure. Call once after sync_hole_to_obsidian. Returns the watched folder.",
+    input: obj({
+      vault_path: str("Absolute path to an existing Obsidian vault folder"),
+      folder: str("Subfolder inside the vault for Rabbithole notes (default 'Rabbithole')", { optional: true }),
+    }),
+    resultKind: "json",
+    run: ({ vault_path, folder }) => startVaultWatch({ vaultPath: vaultPath, folder, store: defaultFsStore }),
+  },
+  {
+    name: "stop_obsidian_watch",
+    description: "Stop the two-way Obsidian vault watcher started by watch_obsidian_vault.",
+    input: obj({}),
+    resultKind: "json",
+    run: () => {
+      stopVaultWatch();
+      return { stopped: true };
+    },
   },
 ];
