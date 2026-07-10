@@ -233,6 +233,13 @@ async function verifyCanvasBranching() {
   assert(JSON.stringify(snapshotJson).includes("Second branch explains the geometric view"));
   assert(!JSON.stringify(snapshotJson).includes(MOCK_KEY), "session JSON export must not contain provider key");
 
+  const snapshotJson = await page.evaluate(() => window.__rhWebApp.exportSnapshotJsonForTest());
+  assert.equal(snapshotJson.format, "rabbithole-session-json");
+  assert.equal(snapshotJson.format_version, 1);
+  assert.equal(snapshotJson.session.title, "Web Smoke");
+  assert(JSON.stringify(snapshotJson).includes("Second branch explains the geometric view"));
+  assert(!JSON.stringify(snapshotJson).includes(MOCK_KEY), "session JSON export must not contain provider key");
+
   const rawHoleJson = await page.evaluate(() => window.__rhWebApp.readRawHole().then((hole) => JSON.stringify(hole)));
   assert(rawHoleJson.includes("Second branch explains the geometric view"));
   assert(!rawHoleJson.includes(MOCK_KEY), "IndexedDB hole record must not contain provider key");
